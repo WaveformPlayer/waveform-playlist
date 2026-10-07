@@ -42,6 +42,36 @@ const PLAYLIST_OWN_OPTIONS = [
     'barPosition', 'showChapterMarkers', 'chapterMarkerColor'
 ];
 
+/**
+ * The play-state glyphs, inline: the playlist draws its own icons rather than
+ * relying on an icon font the host page may not load (it used Tabler's `ti`
+ * classes, so on a page without Tabler every play/pause icon was blank).
+ * @private
+ */
+const ICONS = {
+    play: '<svg class="wp-i wp-i-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.6v12.8a1 1 0 0 0 1.5.86l10.6-6.4a1 1 0 0 0 0-1.72L9.5 4.74A1 1 0 0 0 8 5.6z"/></svg>',
+    pause: '<svg class="wp-i wp-i-pause" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>',
+    // "Now playing": three bars, animated while the track plays.
+    bars: '<span class="wp-bars" aria-hidden="true"><i></i><i></i><i></i></span>',
+};
+
+/**
+ * A play-state glyph: one element holding all three icons, of which CSS shows
+ * the one named by `data-state` — `play`, `pause`, or `playing` (the bars;
+ * hovering the row swaps them for pause).
+ * @private
+ * @param {string} className - Extra classes (`wp-queue-state`, …).
+ * @returns {HTMLSpanElement}
+ */
+function stateIcon(className = '') {
+    const el = document.createElement('span');
+    el.className = ('wp-state ' + className).trim();
+    el.dataset.state = 'play';
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = ICONS.play + ICONS.pause + ICONS.bars;
+    return el;
+}
+
 /** Swap a broken artwork `<img>` for the placeholder tile on load failure. */
 function applyArtFallback(img) {
     img.addEventListener('error', () => {
@@ -547,7 +577,8 @@ export class WaveformPlaylist {
         // explicitly (coverSize option, else ~waveform height + the time line)
         // so it sits flush with the waveform column and never balloons to the
         // artwork's native size.
-        const coverSize = (this.options.coverSize || ((this.options.height || 56) + 36)) + 'px';
+        // Default: the waveform plus the title/artist block above it.
+        const coverSize = (this.options.coverSize || ((this.options.height || 56) + 48)) + 'px';
         const cover = document.createElement('button');
         cover.type = 'button';
         cover.className = 'wp-hero-cover';
@@ -557,9 +588,7 @@ export class WaveformPlaylist {
 
         const overlay = document.createElement('span');
         overlay.className = 'wp-hero-overlay';
-        const icon = document.createElement('i');
-        icon.className = 'ti ti-player-play';
-        icon.setAttribute('aria-hidden', 'true');
+        const icon = stateIcon();
         overlay.appendChild(icon);
         cover.appendChild(overlay);
         cover.addEventListener('click', () => this.togglePlay());
@@ -568,12 +597,11 @@ export class WaveformPlaylist {
         this.setHeroArt(first.artwork);
         hero.appendChild(cover);
 
-        // Waveform stage + time readout.
+        // Title/artist + time, then the waveform beneath them.
         const main = document.createElement('div');
         main.className = 'wp-hero-main';
-        main.appendChild(stage);
 
-        // Meta row beneath the waveform: now-playing title/artist on the
+        // Meta row above the waveform: now-playing title/artist on the
         // left, current/total time on the right.
         const meta = document.createElement('div');
         meta.className = 'wp-hero-meta';
@@ -603,6 +631,7 @@ export class WaveformPlaylist {
         meta.appendChild(time);
 
         main.appendChild(meta);
+        main.appendChild(stage);
 
         hero.appendChild(main);
         this.appendOwn(hero);
@@ -632,12 +661,16 @@ export class WaveformPlaylist {
             }
             this.heroArt.style.display = '';
             if (this.heroArt.getAttribute('src') !== src) this.heroArt.src = src;
+            this.heroCover.classList.add('has-art');
         } else if (this.heroArt) {
             this.heroArt.style.display = 'none';
             // Removing the attribute (rather than src = '') fires no error
             // event, so the broken-art fallback doesn't kick in.
             this.heroArt.removeAttribute('src');
         }
+        // Without artwork the cover is a blank tile: its play/pause disc stays
+        // on while playing rather than leaving an empty square.
+        if (!src) this.heroCover.classList.remove('has-art');
     }
 
     /**
@@ -655,10 +688,9 @@ export class WaveformPlaylist {
         bar.className = 'wp-now-bar';
 
         // No cover here — the grid cards carry the artwork + play/pause. The bar
-        // is just the waveform with a title/time meta row beneath it.
-        bar.appendChild(stage);
+        // is a title/time meta row with the waveform beneath it, like the hero.
 
-        // Meta row below the waveform: title/artist on the left, time on the
+        // Meta row above the waveform: title/artist on the left, time on the
         // right (full width, so the title is never clipped).
         const meta = document.createElement('div');
         meta.className = 'wp-now-meta';
@@ -686,6 +718,7 @@ export class WaveformPlaylist {
         meta.appendChild(time);
 
         bar.appendChild(meta);
+        bar.appendChild(stage);
 
         if (this.options.barPosition === 'top') bar.classList.add('wp-now-bar-top');
         this.appendOwn(bar);
@@ -728,10 +761,7 @@ export class WaveformPlaylist {
                 thumb.appendChild(img);
                 const overlay = document.createElement('span');
                 overlay.className = 'wp-queue-ov';
-                const ic = document.createElement('i');
-                ic.className = 'wp-queue-state ti ti-player-play';
-                ic.setAttribute('aria-hidden', 'true');
-                overlay.appendChild(ic);
+                overlay.appendChild(stateIcon('wp-queue-state'));
                 thumb.appendChild(overlay);
                 item.appendChild(thumb);
             } else {
@@ -740,10 +770,7 @@ export class WaveformPlaylist {
                 num.setAttribute('aria-hidden', 'true');
                 num.textContent = index + 1;
                 item.appendChild(num);
-                const ic = document.createElement('i');
-                ic.className = 'wp-queue-state wp-queue-state-num ti ti-player-play';
-                ic.setAttribute('aria-hidden', 'true');
-                item.appendChild(ic);
+                item.appendChild(stateIcon('wp-queue-state wp-queue-state-num'));
             }
 
             const info = document.createElement('div');
@@ -823,10 +850,7 @@ export class WaveformPlaylist {
             }
             const overlay = document.createElement('span');
             overlay.className = 'wp-grid-ov';
-            const ic = document.createElement('i');
-            ic.className = 'wp-queue-state ti ti-player-play';
-            ic.setAttribute('aria-hidden', 'true');
-            overlay.appendChild(ic);
+            overlay.appendChild(stateIcon('wp-queue-state'));
             cover.appendChild(overlay);
             card.appendChild(cover);
 
@@ -1034,18 +1058,17 @@ export class WaveformPlaylist {
         if (this.isHero || this.isGrid) {
             const playing = this.isPlaying;
             if (this.heroIcon) {
-                this.heroIcon.className = playing ? 'ti ti-player-pause' : 'ti ti-player-play';
+                this.heroIcon.dataset.state = playing ? 'pause' : 'play';
             }
             if (this.heroCover) {
                 this.heroCover.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+                this.heroCover.classList.toggle('is-playing', playing);
             }
             if (this.listElement) {
                 this.listElement.querySelectorAll('.wp-queue-state').forEach((ic) => {
                     const item = ic.closest('[data-index]');
                     const i = item ? Number(item.dataset.index) : -1;
-                    const isActivePlaying = playing && i === this.currentTrackIndex;
-                    ic.classList.toggle('ti-player-pause', isActivePlaying);
-                    ic.classList.toggle('ti-player-play', !isActivePlaying);
+                    ic.dataset.state = playing && i === this.currentTrackIndex ? 'playing' : 'play';
                 });
             }
             return;
@@ -1062,9 +1085,9 @@ export class WaveformPlaylist {
             const overlay = container.querySelector('.wp-artwork-overlay');
             if (overlay) {
                 overlay.style.display = isActive ? 'flex' : 'none';
-                const icon = overlay.querySelector('i');
+                const icon = overlay.querySelector('.wp-state');
                 if (icon) {
-                    icon.className = this.isPlaying && isActive ? 'ti ti-player-pause' : 'ti ti-player-play';
+                    icon.dataset.state = this.isPlaying && isActive ? 'playing' : 'play';
                 }
             }
         });
@@ -1275,10 +1298,7 @@ export class WaveformPlaylist {
                     overlay.className = 'wp-artwork-overlay';
                     overlay.style.display = 'none';
 
-                    const icon = document.createElement('i');
-                    icon.className = 'ti ti-player-play';
-                    icon.setAttribute('aria-hidden', 'true'); // purely visual
-                    overlay.appendChild(icon);
+                    overlay.appendChild(stateIcon()); // purely visual
 
                     artworkContainer.appendChild(overlay);
                 }

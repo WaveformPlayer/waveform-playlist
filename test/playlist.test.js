@@ -909,7 +909,8 @@ describe('play state overlay', () => {
 
 		const overlay = container.querySelector('.wp-item[data-index="1"] .wp-artwork-overlay');
 		expect(overlay.style.display).toBe('flex');
-		expect(overlay.querySelector('i').className).toContain('ti-player-pause');
+		// The playing row shows the "now playing" bars (pause under the pointer).
+		expect(overlay.querySelector('.wp-state').dataset.state).toBe('playing');
 	});
 
 	it('hides the overlay on a row that is no longer active', () => {

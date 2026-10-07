@@ -17,6 +17,20 @@ var PLAYLIST_OWN_OPTIONS = [
   "showChapterMarkers",
   "chapterMarkerColor"
 ];
+var ICONS = {
+  play: '<svg class="wp-i wp-i-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.6v12.8a1 1 0 0 0 1.5.86l10.6-6.4a1 1 0 0 0 0-1.72L9.5 4.74A1 1 0 0 0 8 5.6z"/></svg>',
+  pause: '<svg class="wp-i wp-i-pause" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>',
+  // "Now playing": three bars, animated while the track plays.
+  bars: '<span class="wp-bars" aria-hidden="true"><i></i><i></i><i></i></span>'
+};
+function stateIcon(className = "") {
+  const el = document.createElement("span");
+  el.className = ("wp-state " + className).trim();
+  el.dataset.state = "play";
+  el.setAttribute("aria-hidden", "true");
+  el.innerHTML = ICONS.play + ICONS.pause + ICONS.bars;
+  return el;
+}
 function applyArtFallback(img) {
   img.addEventListener("error", () => {
     if (!img.src.startsWith("data:")) img.src = ARTWORK_FALLBACK;
@@ -417,7 +431,7 @@ var WaveformPlaylist = class {
     const first = this.tracks[0];
     const hero = document.createElement("div");
     hero.className = "wp-hero";
-    const coverSize = (this.options.coverSize || (this.options.height || 56) + 36) + "px";
+    const coverSize = (this.options.coverSize || (this.options.height || 56) + 48) + "px";
     const cover = document.createElement("button");
     cover.type = "button";
     cover.className = "wp-hero-cover";
@@ -426,9 +440,7 @@ var WaveformPlaylist = class {
     cover.setAttribute("aria-label", "Play");
     const overlay = document.createElement("span");
     overlay.className = "wp-hero-overlay";
-    const icon = document.createElement("i");
-    icon.className = "ti ti-player-play";
-    icon.setAttribute("aria-hidden", "true");
+    const icon = stateIcon();
     overlay.appendChild(icon);
     cover.appendChild(overlay);
     cover.addEventListener("click", () => this.togglePlay());
@@ -438,7 +450,6 @@ var WaveformPlaylist = class {
     hero.appendChild(cover);
     const main = document.createElement("div");
     main.className = "wp-hero-main";
-    main.appendChild(stage);
     const meta = document.createElement("div");
     meta.className = "wp-hero-meta";
     const titles = document.createElement("div");
@@ -462,6 +473,7 @@ var WaveformPlaylist = class {
     this.heroTime = time;
     meta.appendChild(time);
     main.appendChild(meta);
+    main.appendChild(stage);
     hero.appendChild(main);
     this.appendOwn(hero);
   }
@@ -487,10 +499,12 @@ var WaveformPlaylist = class {
       }
       this.heroArt.style.display = "";
       if (this.heroArt.getAttribute("src") !== src) this.heroArt.src = src;
+      this.heroCover.classList.add("has-art");
     } else if (this.heroArt) {
       this.heroArt.style.display = "none";
       this.heroArt.removeAttribute("src");
     }
+    if (!src) this.heroCover.classList.remove("has-art");
   }
   /**
    * Build the slim "now playing" transport bar for the grid layout: a small
@@ -504,7 +518,6 @@ var WaveformPlaylist = class {
     const first = this.tracks[0];
     const bar = document.createElement("div");
     bar.className = "wp-now-bar";
-    bar.appendChild(stage);
     const meta = document.createElement("div");
     meta.className = "wp-now-meta";
     const titles = document.createElement("div");
@@ -528,6 +541,7 @@ var WaveformPlaylist = class {
     this.heroTime = time;
     meta.appendChild(time);
     bar.appendChild(meta);
+    bar.appendChild(stage);
     if (this.options.barPosition === "top") bar.classList.add("wp-now-bar-top");
     this.appendOwn(bar);
   }
@@ -561,10 +575,7 @@ var WaveformPlaylist = class {
         thumb.appendChild(img);
         const overlay = document.createElement("span");
         overlay.className = "wp-queue-ov";
-        const ic = document.createElement("i");
-        ic.className = "wp-queue-state ti ti-player-play";
-        ic.setAttribute("aria-hidden", "true");
-        overlay.appendChild(ic);
+        overlay.appendChild(stateIcon("wp-queue-state"));
         thumb.appendChild(overlay);
         item.appendChild(thumb);
       } else {
@@ -573,10 +584,7 @@ var WaveformPlaylist = class {
         num.setAttribute("aria-hidden", "true");
         num.textContent = index + 1;
         item.appendChild(num);
-        const ic = document.createElement("i");
-        ic.className = "wp-queue-state wp-queue-state-num ti ti-player-play";
-        ic.setAttribute("aria-hidden", "true");
-        item.appendChild(ic);
+        item.appendChild(stateIcon("wp-queue-state wp-queue-state-num"));
       }
       const info = document.createElement("div");
       info.className = "wp-info";
@@ -642,10 +650,7 @@ var WaveformPlaylist = class {
       }
       const overlay = document.createElement("span");
       overlay.className = "wp-grid-ov";
-      const ic = document.createElement("i");
-      ic.className = "wp-queue-state ti ti-player-play";
-      ic.setAttribute("aria-hidden", "true");
-      overlay.appendChild(ic);
+      overlay.appendChild(stateIcon("wp-queue-state"));
       cover.appendChild(overlay);
       card.appendChild(cover);
       const title = document.createElement("span");
@@ -810,18 +815,17 @@ var WaveformPlaylist = class {
     if (this.isHero || this.isGrid) {
       const playing = this.isPlaying;
       if (this.heroIcon) {
-        this.heroIcon.className = playing ? "ti ti-player-pause" : "ti ti-player-play";
+        this.heroIcon.dataset.state = playing ? "pause" : "play";
       }
       if (this.heroCover) {
         this.heroCover.setAttribute("aria-label", playing ? "Pause" : "Play");
+        this.heroCover.classList.toggle("is-playing", playing);
       }
       if (this.listElement) {
         this.listElement.querySelectorAll(".wp-queue-state").forEach((ic) => {
           const item = ic.closest("[data-index]");
           const i = item ? Number(item.dataset.index) : -1;
-          const isActivePlaying = playing && i === this.currentTrackIndex;
-          ic.classList.toggle("ti-player-pause", isActivePlaying);
-          ic.classList.toggle("ti-player-play", !isActivePlaying);
+          ic.dataset.state = playing && i === this.currentTrackIndex ? "playing" : "play";
         });
       }
       return;
@@ -833,9 +837,9 @@ var WaveformPlaylist = class {
       const overlay = container.querySelector(".wp-artwork-overlay");
       if (overlay) {
         overlay.style.display = isActive ? "flex" : "none";
-        const icon = overlay.querySelector("i");
+        const icon = overlay.querySelector(".wp-state");
         if (icon) {
-          icon.className = this.isPlaying && isActive ? "ti ti-player-pause" : "ti ti-player-play";
+          icon.dataset.state = this.isPlaying && isActive ? "playing" : "play";
         }
       }
     });
@@ -1000,10 +1004,7 @@ var WaveformPlaylist = class {
           const overlay = document.createElement("div");
           overlay.className = "wp-artwork-overlay";
           overlay.style.display = "none";
-          const icon = document.createElement("i");
-          icon.className = "ti ti-player-play";
-          icon.setAttribute("aria-hidden", "true");
-          overlay.appendChild(icon);
+          overlay.appendChild(stateIcon());
           artworkContainer.appendChild(overlay);
         }
         item.appendChild(artworkContainer);

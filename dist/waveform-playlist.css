@@ -1,20 +1,40 @@
 /**
  * WaveformPlaylist - Core Styles
- * Minimal, semantic styling for playlist functionality
+ *
+ * One grid for every layout. Three measurements line everything up:
+ *
+ *   --wp-inset       the left/right inset of every row AND the hero, so the
+ *                    cover, the thumbnails and the chapter rail share a left
+ *                    edge and every time readout shares a right edge;
+ *   --wp-thumb-size  the lead column (thumbnail, track number, chapter dot);
+ *   --wp-gap         lead column → text, so every title and chapter label
+ *                    starts on the same line.
+ *
+ * Colour-agnostic like the rest of the family: everything derives from
+ * `currentColor`, so it fits a light page and a dark one as is.
  */
 
 /* ==========================================================================
-   Base Styles
+   Base
    ========================================================================== */
 
 .waveform-playlist {
     font-family: inherit;
     color: inherit;
 
-    /* Glyph-over-cover overlays (hero transport, grid item). Deliberately not
-       theme-varying: the cover underneath is an arbitrary image, so a light
-       page says nothing about it — the overlay is always a dark surface and
-       always takes the dark treatment. The scrim is what keeps the glyph over
+    --wp-inset: 0.5rem;
+    --wp-gap: 0.875rem;
+    --wp-thumb-size: 36px;
+    --wp-row-height: 3rem;
+    --wp-radius: 8px;
+    --wp-muted: color-mix(in srgb, currentColor 62%, transparent);
+    --wp-line: color-mix(in srgb, currentColor 10%, transparent);
+    --wp-hover: color-mix(in srgb, currentColor 6%, transparent);
+
+    /* Glyph-over-cover overlays (hero transport, grid item, row thumbnails).
+       Deliberately not theme-varying: the cover underneath is an arbitrary
+       image, so a light page says nothing about it — the overlay is always a
+       dark disc with a light glyph. The scrim is what keeps the glyph over
        WCAG 1.4.11's 3:1 minimum on ANY cover; re-theme the pair together or
        that guarantee goes with it. Mirrors --wfp-btn-artwork-* in
        @arraypress/waveform-player, which solves the same problem for
@@ -28,16 +48,6 @@
     box-sizing: border-box;
 }
 
-/* ==========================================================================
-   Layout Components
-   ========================================================================== */
-
-/* Player Container — the "now playing" header. A small bottom margin keeps it
-   off the track list below. */
-.wp-player {
-    margin-bottom: 0.5rem;
-}
-
 /* `showArtist: false` — hide the now-playing + per-row artists. (Hero/grid
    skip rendering the element; list/minimal hide it here.) */
 .wp-no-artist .wp-artist,
@@ -45,18 +55,93 @@
     display: none;
 }
 
-/* Match the track-row gap (1rem) so the header's title/time fall into the same
-   columns as the list — the player's own info row defaults to a tighter gap. */
-.wp-player .waveform-track,
-.wp-player .waveform-info {
-    gap: 1rem;
+/* ==========================================================================
+   Play-state glyph — one element, three icons; `data-state` picks one.
+   ========================================================================== */
+
+.wp-state {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
 }
 
-/* List Container */
+.wp-state > * {
+    display: none;
+}
+
+.wp-i {
+    width: 1em;
+    height: 1em;
+    fill: currentColor;
+}
+
+.wp-state[data-state='play'] > .wp-i-play,
+.wp-state[data-state='pause'] > .wp-i-pause,
+.wp-state[data-state='playing'] > .wp-bars {
+    display: block;
+}
+
+/* The playing row's bars become a pause button under the pointer. */
+.wp-item:hover .wp-state[data-state='playing'] > .wp-bars {
+    display: none;
+}
+
+.wp-item:hover .wp-state[data-state='playing'] > .wp-i-pause {
+    display: block;
+}
+
+/* "Now playing" bars. */
+.wp-bars {
+    display: none;
+    align-items: flex-end;
+    gap: 2px;
+    width: 12px;
+    height: 12px;
+}
+
+.wp-state[data-state='playing'] > .wp-bars {
+    display: flex;
+}
+
+.wp-bars i {
+    flex: 1;
+    height: 100%;
+    border-radius: 1px;
+    background: currentColor;
+    transform-origin: bottom;
+    animation: wp-bar 1.1s ease-in-out infinite;
+}
+
+.wp-bars i:nth-child(2) { animation-delay: -0.45s; }
+.wp-bars i:nth-child(3) { animation-delay: -0.8s; }
+
+@keyframes wp-bar {
+    0%, 100% { transform: scaleY(0.3); }
+    50% { transform: scaleY(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wp-bars i { animation: none; }
+    .wp-bars i:nth-child(1) { transform: scaleY(0.55); }
+    .wp-bars i:nth-child(3) { transform: scaleY(0.75); }
+}
+
+/* ==========================================================================
+   Rows — the track list (layout="list") and the hero queue
+   ========================================================================== */
+
+/* The now-playing player above a list (layout="list"/"minimal"). */
+.wp-player {
+    margin-bottom: 0.75rem;
+    padding: 0 var(--wp-inset);
+}
+
+/* The list sits under a hairline: one division between "now playing" and
+   "up next", instead of a box around the rows and a border under each. */
 .wp-list-container {
-    border: 1px solid color-mix(in srgb, currentColor 11%, transparent);
-    border-radius: 8px;
-    overflow: hidden;
+    border-top: 1px solid var(--wp-line);
+    padding-top: 0.375rem;
 }
 
 .wp-list {
@@ -65,91 +150,112 @@
     padding: 0;
 }
 
-/* ==========================================================================
-   Track Items
-   ========================================================================== */
-
 .wp-item {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid color-mix(in srgb, currentColor 9%, transparent);
+    gap: var(--wp-gap);
+    min-height: var(--wp-row-height);
+    padding: 0.375rem var(--wp-inset);
+    border-radius: var(--wp-radius);
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: background-color 0.15s;
 }
 
 .wp-item:hover {
-    background: color-mix(in srgb, currentColor 6%, transparent);
+    background: var(--wp-hover);
 }
 
-.wp-item.wp-active {
-    background: color-mix(in srgb, currentColor 10%, transparent);
+.wp-item:focus-visible,
+.wp-chapter:focus-visible,
+.wp-chapter-item:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
 }
 
-.wp-item:last-child {
-    border-bottom: none;
+/* The active row is told apart by its title and its glyph — not by a tint,
+   a side bar AND a bold title at once. */
+.wp-item.wp-active .wp-title {
+    font-weight: 600;
 }
 
-/* Track Number Indicator */
-.wp-indicator {
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.875rem;
-    border-radius: 50%;
-    background: color-mix(in srgb, currentColor 6%, transparent);
-    flex-shrink: 0;
-}
-
-.wp-item.wp-active .wp-indicator {
-    background: color-mix(in srgb, currentColor 14%, transparent);
-    color: currentColor;
-}
-
-/* Track Artwork */
-.wp-artwork-container {
+/* Lead column: a thumbnail, or the track number. */
+.wp-artwork-container,
+.wp-queue-thumb {
     position: relative;
-    width: 40px;
-    height: 40px;
-    flex-shrink: 0;
+    flex: 0 0 auto;
+    width: var(--wp-thumb-size);
+    height: var(--wp-thumb-size);
+    border-radius: 6px;
+    overflow: hidden;
+    background: color-mix(in srgb, currentColor 7%, transparent);
 }
 
-.wp-artwork {
+.wp-artwork,
+.wp-queue-thumb-art {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
-    border-radius: 4px;
     object-fit: cover;
 }
 
-.wp-artwork-overlay {
+.wp-indicator,
+.wp-queue .wp-num,
+.wp-queue .wp-queue-state-num {
+    flex: 0 0 var(--wp-thumb-size);
+    width: var(--wp-thumb-size);
+    text-align: center;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--wp-muted);
+}
+
+/* The glyph over a thumbnail: shown on hover and on the active row. */
+.wp-artwork-overlay,
+.wp-queue-ov {
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
-    border-radius: 4px;
+    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(2px);
+    background: var(--wp-cover-overlay-scrim);
+    color: var(--wp-cover-overlay-color);
+    font-size: 0.875rem;
 }
 
-.wp-artwork-overlay i {
-    color: white;
-    font-size: 18px;
+.wp-queue-ov {
+    opacity: 0;
+    transition: opacity 0.15s;
 }
 
-/* Track Info */
+.wp-queue-item:hover .wp-queue-ov,
+.wp-queue-item:focus-visible .wp-queue-ov,
+.wp-queue-item.wp-active .wp-queue-ov {
+    opacity: 1;
+}
+
+/* No artwork: the number swaps to the glyph on the active row. */
+.wp-queue .wp-queue-state-num {
+    display: none;
+    color: inherit;
+    font-size: 0.875rem;
+}
+
+.wp-queue-item.wp-active .wp-num {
+    display: none;
+}
+
+.wp-queue-item.wp-active .wp-queue-state-num {
+    display: inline-flex;
+}
+
 .wp-info {
     flex: 1;
     min-width: 0;
 }
 
 .wp-title {
+    font-size: 0.9375rem;
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
@@ -157,111 +263,130 @@
 }
 
 .wp-artist {
-    font-size: 0.875rem;
-    opacity: 0.6;
+    font-size: 0.8125rem;
+    color: var(--wp-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.wp-duration {
-    font-size: 0.875rem;
-    opacity: 0.5;
-    flex-shrink: 0;
+/* The one time column: track durations, chapter start times and the hero's
+   readout all end on the same right edge, in even-width figures. */
+.wp-duration,
+.wp-chapter-time,
+.wp-chapters-only .wp-time {
+    flex: 0 0 auto;
+    min-width: 4ch;
+    text-align: right;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--wp-muted);
 }
 
 /* ==========================================================================
-   Chapters
+   Chapters — under their track (multi-track) or as the whole list
+   (a single chaptered track)
    ========================================================================== */
 
-/* Chapters under tracks (multi-track playlists). Nested under their parent
-   track: a continued left accent groups them with the active row, a darker
-   inset surface sets them apart, and a divider closes them off from the next
-   track. */
 .wp-chapters {
     list-style: none;
-    margin: 0;
-    padding: 0.35rem 0 0.6rem 3.25rem;
-    background: color-mix(in srgb, currentColor 5%, transparent);
-    box-shadow: inset 3px 0 0 color-mix(in srgb, currentColor 55%, transparent);
-    border-bottom: 1px solid color-mix(in srgb, currentColor 9%, transparent);
+    margin: 0 0 0.25rem;
+    padding: 0;
 }
 
-.wp-chapter {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem;
-    font-size: 0.875rem;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: background-color 0.2s;
-}
-
-.wp-chapter:hover {
-    background: color-mix(in srgb, currentColor 6%, transparent);
-}
-
-.wp-chapter.wp-active {
-    background: color-mix(in srgb, currentColor 15%, transparent);
-    color: currentColor;
-}
-
-.wp-chapter-time {
-    font-family: monospace;
-    opacity: 0.5;
-    min-width: 3rem;
-}
-
-.wp-chapter.wp-active .wp-chapter-time {
-    color: currentColor;
-    font-weight: 600;
-}
-
-.wp-chapter-label {
-    flex: 1;
-}
-
-/* Chapters only layout (single track with chapters) */
+.wp-chapter,
 .wp-chapters-only .wp-chapter-item {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid color-mix(in srgb, currentColor 6%, transparent);
+    gap: var(--wp-gap);
+    min-height: 2.25rem;
+    padding: 0.25rem var(--wp-inset);
+    border-radius: var(--wp-radius);
+    color: var(--wp-muted);
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: background-color 0.15s, color 0.15s;
 }
 
+/* Chapters under a track start on the TITLE line: they read as parts of it. */
+.wp-chapter {
+    padding-left: calc(var(--wp-inset) + var(--wp-thumb-size) + var(--wp-gap));
+    font-size: 0.875rem;
+}
+
+/* A single chaptered track: the chapters ARE the list. */
+.wp-chapters-only .wp-chapter-item {
+    min-height: 2.75rem;
+    padding-left: calc(var(--wp-inset) + var(--wp-thumb-size) + var(--wp-gap));
+    font-size: 0.9375rem;
+}
+
+.wp-chapter:hover,
 .wp-chapters-only .wp-chapter-item:hover {
-    background: color-mix(in srgb, currentColor 6%, transparent);
+    background: var(--wp-hover);
+    color: inherit;
 }
 
+.wp-chapter.wp-active,
 .wp-chapters-only .wp-chapter-item.wp-active {
-    background: color-mix(in srgb, currentColor 10%, transparent);
-}
-
-.wp-chapters-only .wp-chapter-item:last-child {
-    border-bottom: none;
-}
-
-.wp-chapters-only .wp-time {
-    font-family: monospace;
-    color: color-mix(in srgb, currentColor 90%, transparent);
-    min-width: 3rem;
-}
-
-.wp-chapters-only .wp-chapter-item.wp-active .wp-time {
-    color: currentColor;
+    color: inherit;
     font-weight: 600;
 }
 
+/* The time column goes last, on the right (the markup puts it first). */
+.wp-chapter-time,
+.wp-chapters-only .wp-time {
+    order: 2;
+}
+
+.wp-chapter-label,
 .wp-chapters-only .wp-label {
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The rail: a dot per chapter in the lead column, joined by a hairline, the
+   playing chapter's dot filled. */
+.wp-chapter::before,
+.wp-chapters-only .wp-chapter-item::before {
+    content: '';
+    position: absolute;
+    left: calc(var(--wp-inset) + var(--wp-thumb-size) / 2 - 4px);
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid color-mix(in srgb, currentColor 70%, transparent);
+    transform: translateY(-50%);
+}
+
+.wp-chapter::after,
+.wp-chapters-only .wp-chapter-item::after {
+    content: '';
+    position: absolute;
+    left: calc(var(--wp-inset) + var(--wp-thumb-size) / 2 - 0.5px);
+    top: calc(50% + 6px);
+    height: calc(100% - 12px);
+    width: 1px;
+    background: var(--wp-line);
+}
+
+.wp-chapter:last-child::after,
+.wp-chapters-only .wp-chapter-item:last-child::after {
+    display: none;
+}
+
+.wp-chapter.wp-active::before,
+.wp-chapters-only .wp-chapter-item.wp-active::before {
+    background: currentColor;
+    border-color: currentColor;
 }
 
 /* ==========================================================================
-   Minimal Layout
+   Minimal layout — a row of pills
    ========================================================================== */
 
 .wp-minimal .wp-controls {
@@ -273,83 +398,51 @@
 
 .wp-track-btn {
     padding: 0.5rem 1rem;
-    background: color-mix(in srgb, currentColor 6%, transparent);
-    border: 1px solid color-mix(in srgb, currentColor 11%, transparent);
-    border-radius: 20px;
+    background: none;
+    border: 1px solid var(--wp-line);
+    border-radius: 999px;
     color: inherit;
+    font: inherit;
     font-size: 0.875rem;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background-color 0.15s, border-color 0.15s;
 }
 
 .wp-track-btn:hover {
-    background: color-mix(in srgb, currentColor 9%, transparent);
-    border-color: color-mix(in srgb, currentColor 22%, transparent);
+    background: var(--wp-hover);
 }
 
 .wp-track-btn.wp-active {
-    background: color-mix(in srgb, currentColor 14%, transparent);
-    border-color: color-mix(in srgb, currentColor 50%, transparent);
-    color: currentColor;
+    border-color: currentColor;
+    font-weight: 600;
+}
+
+.wp-track-btn:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
 }
 
 /* ==========================================================================
-   Responsive Design
-   ========================================================================== */
-
-@media (max-width: 480px) {
-    .wp-item {
-        padding: 0.625rem 0.75rem;
-    }
-
-    /* Keep the header inset matching the tighter mobile row padding. */
-    .wp-player {
-        padding: 0 calc(0.75rem + 1px);
-    }
-
-    .wp-chapters {
-        padding-left: 2rem;
-    }
-
-    .wp-artwork-container,
-    .wp-artwork {
-        width: 32px;
-        height: 32px;
-    }
-
-    .wp-title {
-        font-size: 0.9375rem;
-    }
-
-    .wp-artist,
-    .wp-duration {
-        font-size: 0.8125rem;
-    }
-}
-
-/* ==========================================================================
-   Hero Layout — a "now playing" unit (cover + waveform + time) over a
-   stripped numbered queue. Opt in with layout="hero" / data-layout="hero".
-   The active track lives only in the hero; the queue carries titles only, so
-   nothing is shown twice.
+   Hero — a "now playing" unit (cover + title + waveform) over the queue.
+   layout="hero". The cover is the play/pause button.
    ========================================================================== */
 
 .wp-hero {
     display: flex;
-    align-items: center;
-    gap: 0.875rem;
+    align-items: stretch;
+    gap: 1rem;
+    padding: 0 var(--wp-inset);
     margin-bottom: 1rem;
 }
 
-/* The cover doubles as the play/pause button. Its width/height are set inline
-   (≈ waveform height) so it stays a tidy square and never balloons to the
-   artwork's native size. */
+/* Width/height are set inline (coverSize, else the waveform + the title
+   block), so it's a tidy square flush with the column beside it. */
 .wp-hero-cover {
     position: relative;
     flex: 0 0 auto;
     padding: 0;
-    border: 1px solid color-mix(in srgb, currentColor 11%, transparent);
-    border-radius: 8px;
+    border: 1px solid var(--wp-line);
+    border-radius: 10px;
     overflow: hidden;
     cursor: pointer;
     background: color-mix(in srgb, currentColor 7%, transparent);
@@ -366,25 +459,43 @@
     display: block;
 }
 
-/* The resting state is the one everybody sees, so it carries the contrast
-   guarantee — 0.22 here read as 1.69:1 on a light cover, i.e. an all-but-
-   invisible glyph that only became legible once you hovered it. Hover now
-   deepens from an already-safe floor rather than rescuing an unsafe one. */
+/* The glyph sits in a dark disc, so the artwork itself is never dimmed — and
+   the disc, not a scrim over the whole cover, is what holds the contrast. */
 .wp-hero-overlay {
     position: absolute;
-    inset: 0;
+    top: 50%;
+    left: 50%;
+    width: 2.75rem;
+    height: 2.75rem;
     display: flex;
     align-items: center;
     justify-content: center;
+    border-radius: 50%;
     background: var(--wp-cover-overlay-scrim);
     color: var(--wp-cover-overlay-color);
-    font-size: 1.4rem;
-    transition: background-color 0.15s;
+    font-size: 1.05rem;
+    transform: translate(-50%, -50%);
+    transition: background-color 0.15s, transform 0.15s, opacity 0.15s;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
 }
 
 .wp-hero-cover:hover .wp-hero-overlay,
 .wp-hero-cover:focus-visible .wp-hero-overlay {
     background: var(--wp-cover-overlay-scrim-hover);
+    transform: translate(-50%, -50%) scale(1.06);
+}
+
+/* While it plays the cover is just the cover; the pause control comes back
+   under the pointer or keyboard focus. (Not on a cover without artwork: a
+   blank tile with nothing on it reads as broken.) */
+.wp-hero-cover.has-art.is-playing .wp-hero-overlay {
+    opacity: 0;
+}
+
+.wp-hero-cover.is-playing:hover .wp-hero-overlay,
+.wp-hero-cover.is-playing:focus-visible .wp-hero-overlay {
+    opacity: 1;
 }
 
 .wp-hero-cover:focus-visible {
@@ -392,51 +503,57 @@
     outline-offset: 2px;
 }
 
-/* Waveform + time column. The player is waveform-only (showControls/showInfo
-   are false), so this column holds just the waveform and the time readout. */
+/* Title/artist + time, then the waveform. */
 .wp-hero-main {
     flex: 1 1 auto;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
 }
 
 .wp-hero-main .waveform-player {
     margin: 0;
 }
 
-/* Meta row beneath the waveform: now-playing title/artist (left) + time (right). */
-.wp-hero-meta {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.75rem;
-    margin-top: 0.45rem;
+/* Marker labels open BELOW the waveform here: above it is the title block,
+   which a flashed chapter label would sit on top of. */
+.wp-hero-main .waveform-marker-tooltip,
+.wp-now-bar .waveform-marker-tooltip {
+    top: calc(100% + 4px);
+    bottom: auto;
 }
 
-/* Title + artist inline on one line (title, then muted artist). */
-.wp-hero-titles {
+.wp-hero-meta,
+.wp-now-meta {
     display: flex;
-    align-items: baseline;
-    gap: 0.4rem;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.wp-hero-titles,
+.wp-now-titles {
+    display: flex;
+    flex-direction: column;
     min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
 }
 
 .wp-hero-title {
-    font-size: 0.9rem;
+    font-size: 1.0625rem;
     font-weight: 600;
-    flex: 0 1 auto;
+    line-height: 1.25;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .wp-hero-sub {
-    font-size: 0.8rem;
-    opacity: 0.55;
-    flex: 0 1 auto;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: var(--wp-muted);
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -447,126 +564,39 @@
 
 .wp-hero-time {
     flex: 0 0 auto;
-    font-size: 0.78rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
     font-variant-numeric: tabular-nums;
-    opacity: 0.6;
-}
-
-/* ---- Queue ---- */
-.wp-queue-item {
-    gap: 0.75rem;
-}
-
-/* Accent the playing row with a left bar so "now playing" reads at a glance. */
-.wp-queue-item.wp-active,
-.wp-hero-layout .wp-chapter-item.wp-active {
-    box-shadow: inset 3px 0 0 currentColor;
-}
-
-/* Artwork thumbnail with a play/pause overlay (revealed on hover + the active
-   row); the overlay icon reflects play state. */
-.wp-queue-thumb {
-    position: relative;
-    flex: 0 0 auto;
-    width: var(--wp-thumb-size, 36px);
-    height: var(--wp-thumb-size, 36px);
-    border-radius: 6px;
-    overflow: hidden;
-    background: color-mix(in srgb, currentColor 7%, transparent);
-}
-
-.wp-queue-thumb-art {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.wp-queue-ov {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.45);
-    color: #fff;
-    font-size: 0.9rem;
-    opacity: 0;
-    transition: opacity 0.15s;
-}
-
-.wp-queue-item:hover .wp-queue-ov,
-.wp-queue-item:focus-visible .wp-queue-ov,
-.wp-queue-item.wp-active .wp-queue-ov {
-    opacity: 1;
-}
-
-/* Number fallback for tracks without artwork; the number swaps to a play/pause
-   icon on the active row. */
-.wp-queue .wp-num,
-.wp-queue .wp-queue-state-num {
-    flex: 0 0 1.5rem;
-    width: 1.5rem;
-    text-align: center;
-    font-size: 0.85rem;
-    font-variant-numeric: tabular-nums;
-    opacity: 0.5;
-}
-
-.wp-queue .wp-queue-state-num {
-    display: none;
-    opacity: 1;
-}
-
-.wp-queue-item.wp-active .wp-num {
-    display: none;
-}
-
-.wp-queue-item.wp-active .wp-queue-state-num {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.wp-queue-item .wp-title {
-    font-size: 0.9rem;
-}
-
-.wp-queue-item.wp-active .wp-title {
-    font-weight: 600;
+    color: var(--wp-muted);
 }
 
 /* ==========================================================================
-   Density (compact) — scales the hero queue/chapter rows down together.
+   Density (compact) — rows, thumbnails and chapters scale down together.
    ========================================================================== */
 
+.wp-density-compact {
+    --wp-row-height: 2.5rem;
+    --wp-thumb-size: 28px;
+    --wp-gap: 0.75rem;
+}
+
 .wp-density-compact .wp-item {
-    padding: 0.5rem 0.75rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
 }
 
-.wp-density-compact .wp-queue-thumb {
-    width: var(--wp-thumb-size, 28px);
-    height: var(--wp-thumb-size, 28px);
-}
-
-.wp-density-compact .wp-queue-item .wp-title,
-.wp-density-compact .wp-chapters-only .wp-chapter-item,
-.wp-density-compact .wp-chapter {
-    font-size: 0.82rem;
+.wp-density-compact .wp-title,
+.wp-density-compact .wp-chapters-only .wp-chapter-item {
+    font-size: 0.875rem;
 }
 
 .wp-density-compact .wp-chapter {
-    padding: 0.35rem 0.5rem;
-}
-
-.wp-density-compact .wp-chapters {
-    padding-top: 0.2rem;
-    padding-bottom: 0.4rem;
+    min-height: 1.875rem;
+    font-size: 0.8125rem;
 }
 
 /* ==========================================================================
-   Cover position: top — stack the cover above a full-width waveform.
+   Cover position: top — the cover above a full-width waveform.
    ========================================================================== */
 
 .wp-cover-top .wp-hero {
@@ -579,33 +609,34 @@
 }
 
 /* ==========================================================================
-   Grid layout — cover-art cards beneath the hero (layout="grid").
+   Grid layout — cover-art cards with a now-playing bar (layout="grid").
    ========================================================================== */
 
 .wp-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(var(--wp-grid-cover, 84px), 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(var(--wp-grid-cover, 96px), 1fr));
+    gap: 1rem 0.75rem;
 }
 
-/* Card resets on top of the shared .wp-item base (which is a flex row). */
+/* Card resets on top of the shared .wp-item row. */
 .wp-grid-item {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.4rem;
+    gap: 0.45rem;
+    min-height: 0;
     padding: 0;
     border: 0;
+    border-radius: 0;
     background: transparent;
     color: inherit;
     text-align: left;
-    cursor: pointer;
     font: inherit;
+    cursor: pointer;
 }
 
 .wp-grid-item:hover,
 .wp-grid-item.wp-active {
     background: transparent;
-    box-shadow: none;
 }
 
 .wp-grid-cover {
@@ -613,10 +644,10 @@
     display: block;
     width: 100%;
     aspect-ratio: 1 / 1;
-    border-radius: 8px;
+    border-radius: var(--wp-radius);
     overflow: hidden;
     background: color-mix(in srgb, currentColor 7%, transparent);
-    border: 1px solid color-mix(in srgb, currentColor 11%, transparent);
+    border: 1px solid var(--wp-line);
 }
 
 .wp-grid-art {
@@ -627,17 +658,26 @@
     object-fit: cover;
 }
 
+/* The glyph's disc (as on the hero cover): shown on hover, focus and the
+   active card. */
 .wp-grid-ov {
     position: absolute;
-    inset: 0;
+    top: 50%;
+    left: 50%;
+    width: 2.25rem;
+    height: 2.25rem;
     display: flex;
     align-items: center;
     justify-content: center;
+    border-radius: 50%;
     background: var(--wp-cover-overlay-scrim);
     color: var(--wp-cover-overlay-color);
-    font-size: 1.1rem;
+    font-size: 0.875rem;
+    transform: translate(-50%, -50%);
     opacity: 0;
     transition: opacity 0.15s;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
 }
 
 .wp-grid-item:hover .wp-grid-ov,
@@ -646,20 +686,20 @@
     opacity: 1;
 }
 
-/* Fallback when a track has no artwork — a centered number. */
+/* No artwork: a centered number stands in for the cover. */
 .wp-grid-num {
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-variant-numeric: tabular-nums;
     font-size: 1.1rem;
-    opacity: 0.4;
+    font-variant-numeric: tabular-nums;
+    color: var(--wp-muted);
 }
 
-/* Ring the active card (instead of the row's left accent bar); a distinct
-   keyboard-focus ring (WCAG 2.4.7) so focus isn't confused with hover. */
+/* The active card is ringed; keyboard focus gets the same visible ring
+   (WCAG 2.4.7). */
 .wp-grid-item.wp-active .wp-grid-cover,
 .wp-grid-item:focus-visible .wp-grid-cover {
     outline: 2px solid currentColor;
@@ -671,63 +711,55 @@
 }
 
 .wp-grid-title {
-    font-size: 0.8rem;
+    font-size: 0.8125rem;
     line-height: 1.3;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .wp-grid-item.wp-active .wp-grid-title {
     font-weight: 600;
 }
 
-/* "Now playing" transport bar for the grid layout: cover on the left, the
-   waveform with a title/time meta row BELOW it on the right. Sits below the
-   cover grid by default, or above it with barPosition: 'top'. */
+/* The grid's transport: title/time above the waveform, under a hairline (or
+   over one, with barPosition: 'top'). */
 .wp-now-bar {
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
-    margin-top: 1rem;
-    padding: 0.6rem 0.75rem;
-    border: 1px solid color-mix(in srgb, currentColor 11%, transparent);
-    border-radius: 10px;
-    background: color-mix(in srgb, currentColor 4%, transparent);
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--wp-line);
 }
 
 .wp-now-bar-top {
-    margin-top: 0;
-    margin-bottom: 1rem;
+    margin: 0 0 1.25rem;
+    padding: 0 0 1rem;
+    border-top: 0;
+    border-bottom: 1px solid var(--wp-line);
 }
 
-/* The player reclasses its container to .waveform-player; full width, no margin. */
 .wp-now-bar > .waveform-player {
     margin: 0;
 }
 
-.wp-now-meta {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.75rem;
-}
+/* ==========================================================================
+   Narrow screens
+   ========================================================================== */
 
-.wp-now-titles {
-    display: flex;
-    align-items: baseline;
-    gap: 0.4rem;
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-}
+@media (max-width: 480px) {
+    .waveform-playlist {
+        --wp-inset: 0.375rem;
+        --wp-gap: 0.75rem;
+        --wp-thumb-size: 32px;
+    }
 
-.wp-now-titles .wp-hero-title,
-.wp-now-titles .wp-hero-sub {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
+    .wp-hero {
+        gap: 0.75rem;
+    }
 
-.wp-now-meta .wp-hero-time {
-    flex: 0 0 auto;
+    .wp-hero-title {
+        font-size: 1rem;
+    }
 }
