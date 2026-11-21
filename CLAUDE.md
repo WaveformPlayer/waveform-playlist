@@ -7,6 +7,11 @@ markup into tracks/chapters/markers and drives one embedded player.
 - `npm test` — vitest (run before committing). `npm run typecheck` — strict `tsc`, must be 0 errors.
 - `npm run lint` — Biome. `npm run build` — iife + esm + min + css + types. `prepublishOnly` runs test + build.
 - `npm run size`, `npm run dev` — as elsewhere in the family.
+- `npm run test:pack` — builds, packs, installs the tarball beside the published
+  core in a temp consumer and checks both entries (import/require, same class,
+  scan/register vs not, the opt-out), the CDN builds and the types
+  (`test/pack/verify.mjs` + `probe-bundle.mjs`). Needs the registry. Run it
+  before a release, or after touching entries, exports or the build.
 
 ## How player options reach the embedded player
 
