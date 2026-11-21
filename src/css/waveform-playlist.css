@@ -48,6 +48,24 @@
     box-sizing: border-box;
 }
 
+/* The <waveform-playlist> element: a block, like the div it stands in for
+   (custom elements are inline by default). Until it upgrades — the script not
+   loaded yet — it keeps its block box and reserves --wp-element-height, and
+   until the playlist is built its raw [data-track] markup stays hidden (the
+   playlist hides it on init anyway), so chapter labels never flash in and out. */
+waveform-playlist {
+    display: block;
+}
+
+waveform-playlist:not(:defined) {
+    display: block;
+    min-height: var(--wp-element-height, 90px);
+}
+
+waveform-playlist:not(.waveform-playlist) [data-track] {
+    display: none;
+}
+
 /* `showArtist: false` — hide the now-playing + per-row artists. (Hero/grid
    skip rendering the element; list/minimal hide it here.) */
 .wp-no-artist .wp-artist,

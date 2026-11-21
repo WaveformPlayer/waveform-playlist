@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest
 // The REAL core, from the package — not the sibling repo — so this runs
 // against exactly what a consumer installs.
 import { WaveformPlayer } from '@arraypress/waveform-player';
-import { WaveformPlaylist } from '../src/js/index.js';
+import { WaveformPlaylist, WaveformPlaylistElement } from '../src/js/index.js';
 
 /**
  * The playlist against the real @arraypress/waveform-player.
@@ -331,5 +331,46 @@ describe('peer dependency floor (finding 19)', () => {
 		const [, ...floor] = range.match(/^\^(\d+)\.(\d+)\.(\d+)$/).map(Number);
 		const cmp = floor.findIndex((n, i) => n !== FLOOR[i]);
 		expect(cmp === -1 || floor[cmp] > FLOOR[cmp], `peer range ${range} is below ${FLOOR.join('.')}`).toBe(true);
+	});
+});
+
+describe('real core: the <waveform-playlist> element', () => {
+	const render = (attrs = '') => {
+		document.body.innerHTML = `<waveform-playlist ${attrs}>${THREE_TRACKS}</waveform-playlist>`;
+		return document.body.firstElementChild;
+	};
+
+	it('builds a real player from its attributes, and its events bubble from the tag', () => {
+		const el = render('layout="hero" height="72" show-volume loop');
+		expect(el).toBeInstanceOf(WaveformPlaylistElement);
+		const player = el.playlist.player;
+		expect(player).toBeInstanceOf(WaveformPlayer);
+		expect(el.contains(player.container)).toBe(true);
+		expect(player.options).toMatchObject({ height: 72, showVolume: true, loop: false, audioMode: 'self' });
+
+		const heard = [];
+		const listener = (e) => heard.push(e.target);
+		document.addEventListener('waveformplayer:play', listener);
+		player.setPlayingState(true);
+		document.removeEventListener('waveformplayer:play', listener);
+		expect(heard).toHaveLength(1);
+		expect(el.contains(heard[0])).toBe(true);
+	});
+
+	it('a move keeps the real player and its <audio> playing', async () => {
+		const el = render();
+		const player = el.playlist.player;
+		await el.play();
+		expect(player.audio.paused).toBe(false);
+		const section = document.createElement('section');
+		document.body.appendChild(section);
+		section.appendChild(el);
+		await wait(0);
+		expect(el.playlist.player).toBe(player);
+		expect(player.isDestroying).toBeFalsy();
+		expect(player.audio.paused).toBe(false);
+		el.remove();
+		await wait(0);
+		expect(player.isDestroying).toBe(true);
 	});
 });

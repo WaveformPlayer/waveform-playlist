@@ -1,6 +1,6 @@
 "use strict";
 (() => {
-  // src/js/index.ts
+  // src/js/playlist.ts
   var ARTWORK_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="4" fill="#71717a" fill-opacity="0.15"/><g fill="none" stroke="#a1a1aa" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="17" r="2.2"/><circle cx="17" cy="15" r="2.2"/><path d="M10.2 17V7l9-1.6v9"/></g></svg>'
   );
@@ -32,6 +32,8 @@
     "downloadUrl",
     "downloadName"
   ];
+  var instances = /* @__PURE__ */ new WeakMap();
+  var optionSources = /* @__PURE__ */ new WeakMap();
   var ICONS = {
     play: '<svg class="wp-i wp-i-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.6v12.8a1 1 0 0 0 1.5.86l10.6-6.4a1 1 0 0 0 0-1.72L9.5 4.74A1 1 0 0 0 8 5.6z"/></svg>',
     pause: '<svg class="wp-i wp-i-pause" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>',
@@ -86,6 +88,7 @@
         throw new Error("[WaveformPlaylist] WaveformPlayer is required but not found");
       }
       this.options = this.parseOptions(options);
+      instances.set(this.container, this);
       this.tracks = [];
       this.currentTrackIndex = 0;
       this.currentChapterIndex = -1;
@@ -110,10 +113,13 @@
      */
     parseOptions(providedOptions) {
       const container = this.container;
-      const ds = container.dataset;
+      const source = optionSources.get(container);
+      const ds = source ? source() : container.dataset;
       const options = { ...providedOptions };
       NOT_FORWARDED.forEach((key) => delete options[key]);
-      const fromData = { ...window.WaveformPlayer.utils.parseDataAttributes(container) };
+      const fromData = { ...window.WaveformPlayer.utils.parseDataAttributes(
+        source ? { dataset: ds } : container
+      ) };
       [...NOT_FORWARDED, ...PER_TRACK_OPTIONS].forEach((key) => delete fromData[key]);
       Object.assign(options, fromData);
       const flag = (key, fallback) => ds[key] !== void 0 ? ds[key] !== "false" : options[key] ?? fallback;
@@ -1012,8 +1018,10 @@
      * @internal
      * @param index - Track index to select
      * @param onLoaded - Run after the track's onLoad
+     * @param autoplay - Play once loaded (the core's default); false loads
+     *   it paused.
      */
-    loadTrackAt(index, onLoaded) {
+    loadTrackAt(index, onLoaded, autoplay = true) {
       if (index < 0 || index >= this.tracks.length) return;
       const track = this.tracks[index];
       this.currentTrackIndex = index;
@@ -1023,7 +1031,8 @@
         this.pending = { url: track.url, onLoad: onLoaded };
       }
       if (this.player) {
-        this.player.loadTrack(track.url, track.title, track.artist, this.trackPlayerOptions(track));
+        const options = autoplay ? this.trackPlayerOptions(track) : { ...this.trackPlayerOptions(track), autoplay: false };
+        this.player.loadTrack(track.url, track.title, track.artist, options);
       }
       this.setActiveTrack(index);
       this.clearChapterHighlights();
@@ -1341,6 +1350,7 @@
       (this.ownNodes || []).forEach((node) => node.remove());
       this.container.classList.remove(...this.ownClasses || []);
       delete this.container.dataset.waveformPlaylistInitialized;
+      if (instances.get(this.container) === this) instances.delete(this.container);
       this.tracks.forEach((track) => {
         if (track.element) {
           track.element.style.display = this.trackDisplay && this.trackDisplay.get(track.element) || "";
@@ -1356,11 +1366,285 @@
       this.tracks = [];
     }
   };
+
+  // src/js/element.ts
+  var OPTION_KEYS = [
+    // The playlist's own.
+    "layout",
+    "continuous",
+    "expandChapters",
+    "showDuration",
+    "showPlayState",
+    "showArtist",
+    "coverSize",
+    "thumbnailSize",
+    "density",
+    "coverPosition",
+    "barPosition",
+    "showChapterMarkers",
+    "chapterMarkerColor",
+    // The player's, forwarded (`layout` above is read by both).
+    "height",
+    "samples",
+    "preload",
+    "crossOrigin",
+    "style",
+    "waveformStyle",
+    "waveformGradient",
+    "barWidth",
+    "barSpacing",
+    "barRadius",
+    "buttonAlign",
+    "buttonStyle",
+    "buttonSize",
+    "buttonRadius",
+    "colorPreset",
+    "waveformColor",
+    "progressColor",
+    "autoplay",
+    "showControls",
+    "showInfo",
+    "showTime",
+    "showHoverTime",
+    "seekHandle",
+    "showBpm",
+    "bpm",
+    "singlePlay",
+    "playOnSeek",
+    "showVolume",
+    "volume",
+    "showDownload",
+    "artworkPosition",
+    "playbackRate",
+    "showPlaybackSpeed",
+    "playbackRates",
+    "enableMediaSession",
+    "showMarkers",
+    "accessibleSeek",
+    "seekLabel",
+    "seekValueText",
+    "errorText",
+    "playPauseLabel",
+    "speedLabel",
+    "loopLabel",
+    "volumeLabel",
+    "muteLabel",
+    "downloadLabel",
+    "artworkAlt",
+    "unknownTrackText",
+    "playIcon",
+    "pauseIcon"
+  ];
+  var TRACK_ATTRIBUTES = [
+    "data-track",
+    "data-url",
+    "data-title",
+    "data-artist",
+    "data-artwork",
+    "data-album",
+    "data-duration",
+    "data-download-url",
+    "data-download-name",
+    "data-waveform",
+    "data-markers",
+    "data-chapter",
+    "data-time",
+    "data-color"
+  ];
+  var kebab = (key) => key.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
+  var booleans = /* @__PURE__ */ new Map();
+  function isPlayerBoolean(key) {
+    let known = booleans.get(key);
+    if (known === void 0) {
+      const parsed = window.WaveformPlayer.utils.parseDataAttributes({ dataset: { [key]: "true" } });
+      known = Object.values(parsed).some((v) => typeof v === "boolean");
+      booleans.set(key, known);
+    }
+    return known;
+  }
+  function readDataset(el) {
+    const dataset = {};
+    for (const key of OPTION_KEYS) {
+      const name = kebab(key);
+      const plain = key === "style" ? null : el.getAttribute(name);
+      const value = plain === "" && isPlayerBoolean(key) ? "true" : plain ?? el.getAttribute("data-" + name);
+      if (value != null) dataset[key] = value;
+    }
+    return dataset;
+  }
+  function snapshot(playlist) {
+    const track = playlist.tracks[playlist.currentTrackIndex];
+    if (!track) return null;
+    const player = playlist.player;
+    const audio = player?.audio;
+    return {
+      element: track.element,
+      url: track.url,
+      time: audio?.currentTime || 0,
+      playing: audio ? !audio.paused : !!player?.isPlaying
+    };
+  }
+  function resume(playlist, state) {
+    const tracks = playlist.tracks;
+    let index = tracks.findIndex((t) => t.element === state.element && t.url === state.url);
+    if (index < 0) index = tracks.findIndex((t) => t.url === state.url);
+    if (index < 0 || !playlist.player) return;
+    if (index === 0 && !state.playing && !state.time) return;
+    const carryOn = () => {
+      if (state.playing) playlist.seekAndPlay(state.time);
+      else if (state.time) playlist.player?.seekTo(state.time);
+    };
+    if (index === 0) {
+      playlist.pending = { url: tracks[0].url, onLoad: carryOn };
+    } else {
+      playlist.loadTrackAt(index, carryOn, state.playing);
+    }
+  }
+  var Base = typeof HTMLElement === "undefined" ? class {
+  } : HTMLElement;
+  var WaveformPlaylistElement = class extends Base {
+    static get observedAttributes() {
+      return OPTION_KEYS.flatMap((key) => key === "style" ? ["data-style"] : [kebab(key), "data-" + kebab(key)]);
+    }
+    constructor() {
+      super();
+      this.playlist = null;
+      optionSources.set(this, () => readDataset(this));
+    }
+    connectedCallback() {
+      if (this._leaving !== void 0) {
+        clearTimeout(this._leaving);
+        this._leaving = void 0;
+        this.playlist?.player?.resizeCanvas?.();
+        return;
+      }
+      if (this.playlist || this._waiting) return;
+      if (document.readyState === "loading") {
+        this._waiting = () => {
+          this._waiting = void 0;
+          if (this.isConnected && !this.playlist) this._build();
+        };
+        document.addEventListener("DOMContentLoaded", this._waiting, { once: true });
+        return;
+      }
+      this._build();
+    }
+    disconnectedCallback() {
+      clearTimeout(this._leaving);
+      this._leaving = setTimeout(() => {
+        this._leaving = void 0;
+        if (!this.isConnected) this._teardown();
+      }, 0);
+    }
+    attributeChangedCallback(name, previous, value) {
+      if (previous !== value) this._queue();
+    }
+    /** Play the current track. */
+    play() {
+      return this.playlist?.player?.play();
+    }
+    /** Pause. */
+    pause() {
+      this.playlist?.player?.pause();
+    }
+    /** Go to the next track — {@link WaveformPlaylist.nextTrack}. */
+    next() {
+      this.playlist?.nextTrack();
+    }
+    /** Go to the previous track — {@link WaveformPlaylist.previousTrack}. */
+    previous() {
+      this.playlist?.previousTrack();
+    }
+    /** @internal Rebuild once, after everything else this microtask checkpoint changes. */
+    _queue() {
+      if (!this.playlist || this._queued) return;
+      this._queued = true;
+      queueMicrotask(() => {
+        this._queued = false;
+        if (this.playlist) this._rebuild();
+      });
+    }
+    /** @internal */
+    _build() {
+      instances.get(this)?.destroy();
+      try {
+        this.playlist = new WaveformPlaylist(this);
+        this.dataset.waveformPlaylistInitialized = "true";
+      } catch (error) {
+        this.playlist = null;
+        console.error("[WaveformPlaylist] Failed to initialize:", error, this);
+      }
+      if (!this._observer) {
+        this._observer = new MutationObserver((records) => {
+          if (records.some((r) => this._isTrackChange(r))) this._queue();
+        });
+      }
+      this._observer.observe(this, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: TRACK_ATTRIBUTES
+      });
+      this._observer.takeRecords();
+    }
+    /** @internal */
+    _teardown() {
+      this._observer?.disconnect();
+      this.playlist?.destroy();
+      this.playlist = null;
+    }
+    /** @internal Rebuild from the current attributes and markup, carrying playback over. */
+    _rebuild() {
+      const state = this.playlist ? snapshot(this.playlist) : null;
+      this._observer?.takeRecords();
+      this._teardown();
+      this._build();
+      if (state && this.playlist) resume(this.playlist, state);
+    }
+    /**
+     * Whether a mutation touched the track markup — not the playlist's own
+     * generated UI (whose time readouts change every frame), nor the inline
+     * `display` it puts on the tracks (filtered out by `attributeFilter`).
+     * @internal
+     * @param record
+     * @returns
+     */
+    _isTrackChange(record) {
+      if (this._trackOf(record.target)) return true;
+      if (record.attributeName === "data-track") return record.target !== this;
+      if (record.type !== "childList") return false;
+      const holdsTrack = (node) => node instanceof Element && (node.matches("[data-track]") || node.querySelector("[data-track]") !== null);
+      return [...record.addedNodes].some(holdsTrack) || [...record.removedNodes].some(holdsTrack);
+    }
+    /**
+     * @internal
+     * @param node
+     * @returns The `[data-track]` inside this element that holds `node`, if any.
+     */
+    _trackOf(node) {
+      const el = node instanceof Element ? node : node.parentElement;
+      const track = el?.closest("[data-track]");
+      return track && track !== this && this.contains(track) ? track : null;
+    }
+  };
+  function defineWaveformPlaylistElement(name = "waveform-playlist") {
+    if (typeof customElements === "undefined") return void 0;
+    const existing = customElements.get(name);
+    if (existing) return existing;
+    const element = class extends WaveformPlaylistElement {
+    };
+    customElements.define(name, element);
+    return element;
+  }
+
+  // src/js/entry.ts
   function autoInit() {
     if (typeof document === "undefined") return;
     const elements = document.querySelectorAll("[data-waveform-playlist]");
     elements.forEach((element) => {
       if (element.dataset.waveformPlaylistInitialized === "true") return;
+      if (element instanceof WaveformPlaylistElement || instances.has(element)) return;
       try {
         new WaveformPlaylist(element);
         element.dataset.waveformPlaylistInitialized = "true";
@@ -1369,32 +1653,54 @@
       }
     });
   }
-  if (typeof document !== "undefined") {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", autoInit);
-    } else {
-      if (typeof window !== "undefined" && window.WaveformPlayer) {
-        autoInit();
-      } else if (typeof window !== "undefined") {
-        const checkInterval = setInterval(() => {
-          if (window.WaveformPlayer) {
-            clearInterval(checkInterval);
-            autoInit();
-          }
-        }, 100);
-        setTimeout(() => clearInterval(checkInterval), 5e3);
-      }
-    }
-  }
   WaveformPlaylist.init = autoInit;
   if (typeof window !== "undefined") {
     window.WaveformPlaylist = WaveformPlaylist;
   }
-  var index_default = WaveformPlaylist;
+  var entry_default = WaveformPlaylist;
+
+  // src/js/index.ts
+  var index_default = entry_default;
+  if (typeof document !== "undefined") {
+    const start = () => {
+      defineWaveformPlaylistElement();
+      entry_default.init();
+    };
+    if (document.readyState === "loading") {
+      defineWaveformPlaylistElement();
+      document.addEventListener("DOMContentLoaded", () => entry_default.init());
+    } else if (typeof window !== "undefined" && window.WaveformPlayer) {
+      start();
+    } else if (typeof window !== "undefined") {
+      const checkInterval = setInterval(() => {
+        if (window.WaveformPlayer) {
+          clearInterval(checkInterval);
+          start();
+        }
+      }, 100);
+      setTimeout(() => clearInterval(checkInterval), 5e3);
+    }
+  }
 })();
 /**
  * WaveformPlaylist
  * Playlist and chapter navigation for WaveformPlayer
+ *
+ * The class alone, free of import-time side effects: `entry.ts` adds the
+ * `window` global, the `init()` scan hook and the `<waveform-playlist>`
+ * element; `index.ts` adds running the scan and registering the element.
+ *
+ * @author ArrayPress
+ * @license MIT
+ */
+/**
+ * WaveformPlaylist
+ * Playlist and chapter navigation for WaveformPlayer
+ *
+ * The default entry point: everything `entry.ts` exports, plus making markup
+ * come alive by itself — it registers `<waveform-playlist>` and scans for
+ * `[data-waveform-playlist]` once the DOM is ready (and the core is loaded).
+ * `@arraypress/waveform-playlist/no-autoinit` does neither.
  *
  * @author ArrayPress
  * @license MIT

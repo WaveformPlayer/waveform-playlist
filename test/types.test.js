@@ -13,7 +13,7 @@ import { resolve } from 'node:path';
  * The declarations are now generated from src/js/types.ts, but the option
  * list there is still written by hand, so this reads both files as text.
  */
-const SRC = readFileSync(resolve(process.cwd(), 'src/js/index.ts'), 'utf8');
+const SRC = readFileSync(resolve(process.cwd(), 'src/js/playlist.ts'), 'utf8');
 const DTS = readFileSync(resolve(process.cwd(), 'src/js/types.ts'), 'utf8');
 
 /** The body of `export interface WaveformPlaylistOptions { … }` (the last one in the file). */

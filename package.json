@@ -12,6 +12,11 @@
       "import": "./dist/waveform-playlist.esm.js",
       "default": "./dist/waveform-playlist.esm.js"
     },
+    "./no-autoinit": {
+      "types": "./types/entry.d.ts",
+      "import": "./dist/waveform-playlist-no-autoinit.esm.js",
+      "default": "./dist/waveform-playlist-no-autoinit.esm.js"
+    },
     "./styles.css": "./dist/waveform-playlist.css",
     "./dist/*": "./dist/*",
     "./package.json": "./package.json"
@@ -30,7 +35,7 @@
     "build:js": "npm run build:iife && npm run build:esm && npm run build:min",
     "build:css": "cp src/css/waveform-playlist.css dist/ && esbuild src/css/waveform-playlist.css --minify --outfile=dist/waveform-playlist.min.css",
     "build:iife": "esbuild src/js/index.ts --bundle --format=iife --outfile=dist/waveform-playlist.js",
-    "build:esm": "esbuild src/js/index.ts --bundle --format=esm --outfile=dist/waveform-playlist.esm.js",
+    "build:esm": "esbuild waveform-playlist.esm=src/js/index.ts waveform-playlist-no-autoinit.esm=src/js/entry.ts --bundle --splitting --format=esm --outdir=dist --chunk-names=waveform-playlist-shared.esm",
     "build:min": "esbuild src/js/index.ts --bundle --format=iife --minify --outfile=dist/waveform-playlist.min.js",
     "build:types": "rm -rf types && tsc -p tsconfig.build.json",
     "dev": "esbuild src/js/index.ts --bundle --format=iife --outfile=dist/waveform-playlist.js --watch",
@@ -67,9 +72,12 @@
   "sideEffects": [
     "*.css",
     "./dist/waveform-playlist.esm.js",
+    "./dist/waveform-playlist-shared.esm.js",
+    "./dist/waveform-playlist-no-autoinit.esm.js",
     "./dist/waveform-playlist.js",
     "./dist/waveform-playlist.min.js",
-    "./src/js/index.ts"
+    "./src/js/index.ts",
+    "./src/js/entry.ts"
   ],
   "peerDependencies": {
     "@arraypress/waveform-player": "^2.0.0"
