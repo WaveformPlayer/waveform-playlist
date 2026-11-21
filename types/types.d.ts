@@ -1,8 +1,8 @@
 /**
- * Type definitions for @arraypress/waveform-playlist
- * Playlist and chapter navigation for @arraypress/waveform-player
+ * Public types for @arraypress/waveform-playlist: the options and the parsed
+ * track/chapter/marker shapes. The framework wrappers derive their prop types
+ * from these, so they are part of the API.
  */
-
 /**
  * A chapter parsed from `[data-chapter]` markup within a track.
  */
@@ -16,7 +16,6 @@ export interface WaveformPlaylistChapter {
     /** The source element the chapter was parsed from. */
     element?: HTMLElement;
 }
-
 /**
  * A waveform marker (either explicit, via `data-markers`, or derived from a
  * track's chapters).
@@ -26,7 +25,6 @@ export interface WaveformPlaylistMarker {
     label?: string;
     color?: string;
 }
-
 /**
  * A track parsed from `[data-track]` markup.
  */
@@ -57,7 +55,6 @@ export interface WaveformPlaylistTrack {
     /** Explicit markers parsed from `data-markers`. */
     markers: WaveformPlaylistMarker[];
 }
-
 /**
  * Configuration options for {@link WaveformPlaylist}.
  *
@@ -111,88 +108,6 @@ export interface WaveformPlaylistOptions {
     coverPosition?: 'left' | 'top';
     /** Grid layout: now-playing bar above or below the covers. Defaults to `'bottom'`. */
     barPosition?: 'top' | 'bottom';
-
     /** Any additional WaveformPlayer option is passed through. */
     [option: string]: unknown;
-}
-
-/**
- * Playlist and chapter navigation for WaveformPlayer.
- */
-export class WaveformPlaylist {
-    /**
-     * Create a new WaveformPlaylist instance.
-     *
-     * @param container Container element or CSS selector.
-     * @param options Configuration options.
-     * @throws If the container is not found or WaveformPlayer is unavailable.
-     */
-    constructor(container: string | HTMLElement, options?: WaveformPlaylistOptions);
-
-    /** The resolved container element. */
-    container: HTMLElement;
-    /** Merged configuration options. */
-    options: WaveformPlaylistOptions;
-    /** Parsed tracks. */
-    tracks: WaveformPlaylistTrack[];
-    /** Index of the currently selected track. */
-    currentTrackIndex: number;
-    /** Index of the active chapter, or -1 when none. */
-    currentChapterIndex: number;
-    /** The underlying WaveformPlayer instance, or `null` before init. */
-    player: unknown | null;
-    /** Whether playback is currently active. */
-    isPlaying: boolean;
-
-    /**
-     * Select and load a track by index.
-     * @param index Track index to select.
-     */
-    selectTrack(index: number): void;
-
-    /**
-     * Seek to a chapter within a track. If the chapter lives on a different
-     * track, the track is loaded first and the seek runs once that track has
-     * loaded; it is dropped if the load fails or another track is selected
-     * first. When the duration isn't known yet (e.g. `preload: 'none'`),
-     * playback starts and the seek lands when the metadata arrives.
-     * @param trackIndex Track index.
-     * @param time Time in seconds to seek to.
-     */
-    seekToChapter(trackIndex: number, time: number): void;
-
-    /** Navigate to the next track (if any). */
-    nextTrack(): void;
-
-    /** Navigate to the previous track (if any). */
-    previousTrack(): void;
-
-    /** Get the underlying WaveformPlayer instance, or `null`. */
-    getPlayer(): unknown | null;
-
-    /** Get the index of the currently selected track. */
-    getCurrentTrackIndex(): number;
-
-    /** Get all parsed tracks. */
-    getTracks(): WaveformPlaylistTrack[];
-
-    /**
-     * Destroy the playlist: remove its listeners and generated DOM, restore the
-     * original `[data-track]` markup in place, and drop the classes and
-     * auto-init flag it added, so the container can be initialised again.
-     */
-    destroy(): void;
-
-    /**
-     * Auto-initialize every element with a `data-waveform-playlist` attribute.
-     */
-    static init(): void;
-}
-
-export default WaveformPlaylist;
-
-declare global {
-    interface Window {
-        WaveformPlaylist: typeof WaveformPlaylist;
-    }
 }

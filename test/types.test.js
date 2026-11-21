@@ -3,22 +3,21 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
- * index.d.ts is hand-written, and the four framework wrappers derive their
- * prop types from it — so an option the runtime supports but the types omit is
- * an option the wrappers can't pass without a cast. It drifted once: `layout`
- * was typed `'list' | 'minimal'` long after 'hero' and 'grid' shipped, and the
- * hero/grid sizing options were never typed at all.
+ * The four framework wrappers derive their prop types from
+ * WaveformPlaylistOptions — so an option the runtime supports but the types
+ * omit is an option the wrappers can't pass without a cast. It drifted once,
+ * when index.d.ts was hand-written: `layout` was typed `'list' | 'minimal'`
+ * long after 'hero' and 'grid' shipped, and the hero/grid sizing options were
+ * never typed at all.
  *
- * There is no TypeScript toolchain here, so this reads both files as text.
+ * The declarations are now generated from src/js/types.ts, but the option
+ * list there is still written by hand, so this reads both files as text.
  */
 const SRC = readFileSync(resolve(process.cwd(), 'src/js/index.ts'), 'utf8');
-const DTS = readFileSync(resolve(process.cwd(), 'index.d.ts'), 'utf8');
+const DTS = readFileSync(resolve(process.cwd(), 'src/js/types.ts'), 'utf8');
 
-/** The body of `export interface WaveformPlaylistOptions { … }`. */
-const optionsBody = DTS.slice(
-	DTS.indexOf('export interface WaveformPlaylistOptions'),
-	DTS.indexOf('export class WaveformPlaylist')
-);
+/** The body of `export interface WaveformPlaylistOptions { … }` (the last one in the file). */
+const optionsBody = DTS.slice(DTS.indexOf('export interface WaveformPlaylistOptions'));
 
 /** The keys of the runtime's PLAYLIST_OWN_OPTIONS array. */
 const ownOptions = SRC
@@ -26,7 +25,7 @@ const ownOptions = SRC
 	.match(/'([^']+)'/g)
 	.map((k) => k.slice(1, -1));
 
-describe('index.d.ts matches the runtime option surface', () => {
+describe('the options type matches the runtime option surface', () => {
 	it('declares every option the playlist owns', () => {
 		const missing = ownOptions.filter((key) => !new RegExp(`\\b${key}\\?:`).test(optionsBody));
 		expect(missing).toEqual([]);

@@ -4,7 +4,7 @@ Multi-track playlist built on `@arraypress/waveform-player`. Parses `[data-track
 markup into tracks/chapters/markers and drives one embedded player.
 
 ## Commands
-- `npm test` — vitest (run before committing).
+- `npm test` — vitest (run before committing). `npm run typecheck` — strict `tsc`, must be 0 errors.
 - `npm run build` — iife + esm + min + css. `prepublishOnly` runs it.
 - `npm run size`, `npm run dev` — as elsewhere in the family.
 
@@ -13,7 +13,7 @@ markup into tracks/chapters/markers and drives one embedded player.
 Player options reach the embedded player by **two** paths:
 
 1. **Modern** — core's `parseDataAttributes` handles it. **No edit needed here.**
-2. **Legacy fallback** — a hand-rolled parser in `src/js/index.js` (~line 191,
+2. **Legacy fallback** — a hand-rolled parser in `src/js/index.ts` (`parsePlayerDataAttributesFallback`,
    the `str('waveformStyle'); int('barWidth'); …` block) that runs against older
    cores. A new option needs `str('<key>')` / `int` / `bool` / `float` added there.
 
@@ -22,10 +22,15 @@ and only breaks for users pinned to an older `@arraypress/waveform-player`.
 If only the fallback parser changed, that's a **patch** release.
 
 ## Layout
-- `src/js/index.js` — the whole library (single file: parsing, DOM, playlist logic).
-- `index.d.ts` — **hand-written**; owns `WaveformPlaylistOptions` and the parsed
+- `src/js/index.ts` — the whole library (single file: parsing, DOM, playlist logic).
+- `src/js/types.ts` — owns `WaveformPlaylistOptions` and the parsed
   track/chapter/marker shapes. The four `waveform-playlist-*` wrappers derive their
-  types from it *and* from `waveform-player`'s.
+  types from it *and* from `waveform-player`'s. A new option still has to be added
+  here by hand (`test/types.test.js` checks it against `PLAYLIST_OWN_OPTIONS`).
+- `types/` — **generated** declarations (`npm run build:types`, internals marked
+  `@internal` are stripped); committed, like `dist/`. Don't edit by hand.
+- `tsconfig.esbuild.json` — the only tsconfig esbuild reads. Don't point the
+  builds at `tsconfig.json`: its `strict` adds `"use strict"` to the IIFE builds.
 
 ## Conventions
 - Peer dep on `@arraypress/waveform-player@^1.x`; `dist/` is committed.
