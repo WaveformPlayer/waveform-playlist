@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
  *
  * There is no TypeScript toolchain here, so this reads both files as text.
  */
-const SRC = readFileSync(resolve(process.cwd(), 'src/js/index.js'), 'utf8');
+const SRC = readFileSync(resolve(process.cwd(), 'src/js/index.ts'), 'utf8');
 const DTS = readFileSync(resolve(process.cwd(), 'index.d.ts'), 'utf8');
 
 /** The body of `export interface WaveformPlaylistOptions { … }`. */

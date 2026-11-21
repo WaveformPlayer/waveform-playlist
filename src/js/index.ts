@@ -7,6 +7,41 @@
  * @license MIT
  */
 
+import type { WaveformPlayer } from '@arraypress/waveform-player';
+import type {
+    WaveformPlaylistChapter,
+    WaveformPlaylistMarker,
+    WaveformPlaylistOptions,
+    WaveformPlaylistTrack,
+} from './types.js';
+
+export type {
+    WaveformPlaylistChapter,
+    WaveformPlaylistMarker,
+    WaveformPlaylistOptions,
+    WaveformPlaylistTrack,
+} from './types.js';
+
+/**
+ * The embedded player as the playlist drives it: the core's public API plus
+ * the `<audio>` element it reads play state and metadata from.
+ * @internal
+ */
+type Player = WaveformPlayer & { audio?: HTMLMediaElement | null };
+
+/**
+ * The single post-load action in flight: a chapter seek waiting on a track
+ * load (`url` + `onLoad`) or on metadata (`cleanup`).
+ * @internal
+ */
+type PendingAction = { url?: string; onLoad?: () => void; cleanup?: () => void };
+
+declare global {
+    interface Window {
+        WaveformPlaylist: typeof WaveformPlaylist;
+    }
+}
+
 /**
  * Placeholder shown when a track's artwork URL fails to load (404 / broken) — a
  * muted music-note tile instead of the browser's broken-image icon. Inline SVG
@@ -34,7 +69,7 @@ const ARTWORK_FALLBACK = 'data:image/svg+xml,' + encodeURIComponent(
  *
  * `layout` is the only name that genuinely collides today; the rest are listed
  * so a future player option can't quietly start colliding with one of them.
- * @private
+ * @internal
  */
 const PLAYLIST_OWN_OPTIONS = [
     'layout', 'continuous', 'expandChapters', 'showDuration', 'showPlayState',
@@ -46,7 +81,7 @@ const PLAYLIST_OWN_OPTIONS = [
  * The play-state glyphs, inline: the playlist draws its own icons rather than
  * relying on an icon font the host page may not load (it used Tabler's `ti`
  * classes, so on a page without Tabler every play/pause icon was blank).
- * @private
+ * @internal
  */
 const ICONS = {
     play: '<svg class="wp-i wp-i-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.6v12.8a1 1 0 0 0 1.5.86l10.6-6.4a1 1 0 0 0 0-1.72L9.5 4.74A1 1 0 0 0 8 5.6z"/></svg>',
@@ -59,11 +94,11 @@ const ICONS = {
  * A play-state glyph: one element holding all three icons, of which CSS shows
  * the one named by `data-state` — `play`, `pause`, or `playing` (the bars;
  * hovering the row swaps them for pause).
- * @private
- * @param {string} className - Extra classes (`wp-queue-state`, …).
- * @returns {HTMLSpanElement}
+ * @internal
+ * @param className - Extra classes (`wp-queue-state`, …).
+ * @returns 
  */
-function stateIcon(className = '') {
+function stateIcon(className: string = ''): HTMLSpanElement {
     const el = document.createElement('span');
     el.className = ('wp-state ' + className).trim();
     el.dataset.state = 'play';
@@ -73,7 +108,7 @@ function stateIcon(className = '') {
 }
 
 /** Swap a broken artwork `<img>` for the placeholder tile on load failure. */
-function applyArtFallback(img) {
+function applyArtFallback(img: HTMLImageElement) {
     img.addEventListener('error', () => {
         if (!img.src.startsWith('data:')) img.src = ARTWORK_FALLBACK;
     });
@@ -86,6 +121,44 @@ function applyArtFallback(img) {
  * @class WaveformPlaylist
  */
 export class WaveformPlaylist {
+    /** The resolved container element. */
+    declare container: HTMLElement;
+    /** Merged configuration options. */
+    declare options: WaveformPlaylistOptions;
+    /** Parsed tracks. */
+    declare tracks: WaveformPlaylistTrack[];
+    /** Index of the currently selected track. */
+    declare currentTrackIndex: number;
+    /** Index of the active chapter, or -1 when none. */
+    declare currentChapterIndex: number;
+    /** The underlying WaveformPlayer instance, or `null` before init. */
+    declare player: unknown | null;
+    /** Whether playback is currently active. */
+    declare isPlaying: boolean;
+
+    /** @internal */ declare listElement: HTMLElement | null;
+    /** @internal */ declare isMinimal: boolean;
+    /** @internal */ declare isHero: boolean;
+    /** @internal */ declare isGrid: boolean;
+    /** @internal */ declare keydownHandler: ((e: KeyboardEvent) => void) | null;
+    /** @internal */ declare pending: PendingAction | null;
+    /** @internal */ declare ownNodes: HTMLElement[];
+    /** @internal */ declare ownClasses: string[];
+    /** @internal */ declare trackDisplay: Map<HTMLElement, string> | null;
+    /** @internal */ declare heroCover: HTMLButtonElement | null | undefined;
+    /** @internal */ declare heroIcon: HTMLSpanElement | null | undefined;
+    /** @internal */ declare heroArt: HTMLImageElement | null | undefined;
+    /** @internal */ declare heroTitle: HTMLSpanElement | null | undefined;
+    /** @internal */ declare heroSub: HTMLSpanElement | null | undefined;
+    /** @internal */ declare heroTime: HTMLDivElement | null | undefined;
+    /** @internal */ declare rangeChecked: Set<number> | undefined;
+    /** @internal */ declare _heroTimeIndex: number | undefined;
+
+    /**
+     * Auto-initialize every element with a `data-waveform-playlist` attribute.
+     */
+    declare static init: () => void;
+
     /**
      * Create a new WaveformPlaylist instance
      *
@@ -110,10 +183,10 @@ export class WaveformPlaylist {
      * the playlist always owns its audio.
      * @throws {Error} If container not found or WaveformPlayer not available
      */
-    constructor(container, options = {}) {
+    constructor(container: string | HTMLElement, options: WaveformPlaylistOptions = {}) {
         // Resolve container
         this.container = typeof container === 'string'
-            ? document.querySelector(container)
+            ? document.querySelector<HTMLElement>(container)!
             : container;
 
         if (!this.container) {
@@ -154,14 +227,14 @@ export class WaveformPlaylist {
 
     /**
      * Parse options from container data attributes and merge with provided options
-     * @private
-     * @param {Object} providedOptions - Options passed to constructor
-     * @returns {Object} Merged options object
+     * @internal
+     * @param providedOptions - Options passed to constructor
+     * @returns Merged options object
      */
-    parseOptions(providedOptions) {
+    parseOptions(providedOptions: WaveformPlaylistOptions): WaveformPlaylistOptions {
         const container = this.container;
         const ds = container.dataset;
-        const options = {...providedOptions};
+        const options: Record<string, any> = {...providedOptions};
 
         // The playlist always drives a self-mode player that owns its audio.
         // The framework wrappers forward `audioMode` from their props, and an
@@ -185,7 +258,7 @@ export class WaveformPlaylist {
         // wrappers — which pass exactly these as constructor options and set
         // no data-* — had every one of them silently ignored. A present
         // boolean attribute is true unless it says "false".
-        const flag = (key, fallback) => (ds[key] !== undefined
+        const flag = (key: string, fallback: boolean | null) => (ds[key] !== undefined
             ? ds[key] !== 'false'
             : (options[key] ?? fallback));
 
@@ -200,8 +273,8 @@ export class WaveformPlaylist {
         options.showArtist = flag('showArtist', true);
 
         // Hero/grid sizing (px) — null falls back to the derived/CSS default.
-        options.coverSize = parseInt(ds.coverSize, 10) || options.coverSize || null;
-        options.thumbnailSize = parseInt(ds.thumbnailSize, 10) || options.thumbnailSize || null;
+        options.coverSize = parseInt(ds.coverSize as string, 10) || options.coverSize || null;
+        options.thumbnailSize = parseInt(ds.thumbnailSize as string, 10) || options.thumbnailSize || null;
         // Row density ('comfortable' | 'compact') and hero cover position
         // ('left' | 'top').
         options.density = ds.density || options.density || 'comfortable';
@@ -224,11 +297,11 @@ export class WaveformPlaylist {
      * as the player gains options. Falls back to a local parser only for cores
      * older than the one that exposes the bridge helper.
      *
-     * @private
-     * @param {HTMLElement} container - The playlist container element
-     * @returns {Object} Sparse player options parsed from the container's data-*
+     * @internal
+     * @param container - The playlist container element
+     * @returns Sparse player options parsed from the container's data-*
      */
-    parsePlayerDataAttributes(container) {
+    parsePlayerDataAttributes(container: HTMLElement): Record<string, any> {
         const utils = typeof window !== 'undefined'
             && window.WaveformPlayer && window.WaveformPlayer.utils;
         if (utils && typeof utils.parseDataAttributes === 'function') {
@@ -247,50 +320,50 @@ export class WaveformPlaylist {
      * `showBPM` option. Reading `dataset.showBPM` would target the wrong
      * attribute (`data-show-b-p-m`) and silently drop the flag.
      *
-     * @private
-     * @param {HTMLElement} container - The playlist container element
-     * @returns {Object} Sparse player options parsed from the container's data-*
+     * @internal
+     * @param container - The playlist container element
+     * @returns Sparse player options parsed from the container's data-*
      */
-    parsePlayerDataAttributesFallback(container) {
+    parsePlayerDataAttributesFallback(container: HTMLElement): Record<string, any> {
         const ds = container.dataset;
-        const opts = {};
+        const opts: Record<string, any> = {};
         // Semantics match the core's parseDataAttributes (test/integration.test.js
         // checks parity against the real one): an empty string attribute is
         // absent, and a present boolean attribute is true only when "true".
-        const str = (k, o = k) => { if (ds[k]) opts[o] = ds[k]; };
-        const bool = (k, o = k) => { if (ds[k] !== undefined) opts[o] = ds[k] === 'true'; };
+        const str = (k: string, o: string = k) => { if (ds[k]) opts[o] = ds[k]; };
+        const bool = (k: string, o: string = k) => { if (ds[k] !== undefined) opts[o] = ds[k] === 'true'; };
         // A gradient-capable colour may be a JSON array of stops.
-        const color = (k, o = k) => {
+        const color = (k: string, o: string = k) => {
             if (!ds[k]) return;
-            let value = ds[k];
+            let value: any = ds[k];
             if (value.trim().startsWith('[')) {
                 try { value = JSON.parse(value); } catch (e) { /* keep the raw string, as the core does */ }
             }
             opts[o] = value;
         };
         // A CSS length: a bare number is px, a unit string is kept verbatim.
-        const length = (k, o = k) => {
+        const length = (k: string, o: string = k) => {
             if (!ds[k]) return;
-            opts[o] = /^\d+(\.\d+)?$/.test(ds[k].trim()) ? parseFloat(ds[k]) : ds[k];
+            opts[o] = /^\d+(\.\d+)?$/.test(ds[k]!.trim()) ? parseFloat(ds[k]!) : ds[k];
         };
         // Numeric attributes are only forwarded when they actually parsed — a
         // NaN reaching the player sizes its canvas to nothing, which reads as a
         // broken player rather than a bad attribute.
-        const num = (k, o, parse) => {
+        const num = (k: string, o: string, parse: (v: string) => number) => {
             if (!ds[k]) return;
-            const n = parse(ds[k]);
+            const n = parse(ds[k]!);
             if (Number.isFinite(n)) opts[o] = n;
             else console.warn(`[WaveformPlaylist] Invalid ${k} attribute, expected a number:`, ds[k]);
         };
-        const int = (k, o = k) => num(k, o, (v) => parseInt(v, 10));
-        const float = (k, o = k) => num(k, o, parseFloat);
+        const int = (k: string, o: string = k) => num(k, o, (v) => parseInt(v, 10));
+        const float = (k: string, o: string = k) => num(k, o, parseFloat);
         // JSON.parse validates syntax, not shape: '2' and '{"a":1}' parse
         // cleanly and then throw at the first .map() downstream. Require the
         // array the option is documented to be.
-        const jsonArray = (k, o = k) => {
+        const jsonArray = (k: string, o: string = k) => {
             if (!ds[k]) return;
             let parsed;
-            try { parsed = JSON.parse(ds[k]); }
+            try { parsed = JSON.parse(ds[k]!); }
             catch (e) {
                 console.warn(`[WaveformPlaylist] Invalid ${k} JSON:`, e);
                 return;
@@ -341,11 +414,11 @@ export class WaveformPlaylist {
      * `.length`/`.map()` downstream, and a marker whose `time` isn't a number
      * renders at `left: NaN%`.
      *
-     * @private
-     * @param {string|undefined} raw - Raw `data-markers` value.
-     * @returns {Array<Object>} Renderable markers (empty when nothing survives).
+     * @internal
+     * @param raw - Raw `data-markers` value.
+     * @returns Renderable markers (empty when nothing survives).
      */
-    parseMarkers(raw) {
+    parseMarkers(raw: string | undefined): WaveformPlaylistMarker[] {
         if (!raw) return [];
 
         let parsed;
@@ -374,11 +447,11 @@ export class WaveformPlaylist {
      * a string; anything else — a `.json` peaks URL, or a comma-separated
      * list — is passed through for the core to resolve, which it already does.
      *
-     * @private
-     * @param {string|undefined} raw - Raw `data-waveform` value.
-     * @returns {number[]|string|undefined} Peaks, a peaks source, or undefined.
+     * @internal
+     * @param raw - Raw `data-waveform` value.
+     * @returns Peaks, a peaks source, or undefined.
      */
-    parseWaveform(raw) {
+    parseWaveform(raw: string | undefined): number[] | string | undefined {
         const value = (raw || '').trim();
         if (!value) return undefined;
         if (!value.startsWith('[')) return value;
@@ -394,18 +467,18 @@ export class WaveformPlaylist {
 
     /**
      * Parse tracks and chapters from container markup
-     * @private
+     * @internal
      */
     parseTracks() {
-        const trackElements = this.container.querySelectorAll('[data-track]');
+        const trackElements = this.container.querySelectorAll<HTMLElement>('[data-track]');
 
         this.tracks = Array.from(trackElements).map((el, index) => {
             // Parse chapters from child elements, in time order (stable, so
             // chapters sharing a time keep their markup order). Everything
             // downstream — the rendered list, the active-chapter scan, the
             // markers — assumes ascending times.
-            const chapters = Array.from(el.querySelectorAll('[data-chapter]')).map(ch => {
-                const label = ch.textContent.trim();
+            const chapters = Array.from(el.querySelectorAll<HTMLElement>('[data-chapter]')).map(ch => {
+                const label = ch.textContent!.trim();
                 if (!(ch.dataset.time || '').trim()) {
                     console.warn(`[WaveformPlaylist] Chapter "${label}" has no data-time; placing it at 0:00.`);
                 }
@@ -436,7 +509,7 @@ export class WaveformPlaylist {
 
     /**
      * Initialize the playlist UI and player
-     * @private
+     * @internal
      */
     init() {
         // Everything init() adds to the container is recorded, so destroy()
@@ -478,7 +551,7 @@ export class WaveformPlaylist {
         this.trackDisplay = new Map();
         this.tracks.forEach(track => {
             if (track.element) {
-                this.trackDisplay.set(track.element, track.element.style.display);
+                this.trackDisplay!.set(track.element, track.element.style.display);
                 track.element.style.display = 'none';
             }
         });
@@ -540,10 +613,10 @@ export class WaveformPlaylist {
 
     /**
      * Append a generated node to the container and record it for destroy().
-     * @private
-     * @param {HTMLElement} node
+     * @internal
+     * @param node
      */
-    appendOwn(node) {
+    appendOwn(node: HTMLElement) {
         this.container.appendChild(node);
         this.ownNodes.push(node);
     }
@@ -551,10 +624,10 @@ export class WaveformPlaylist {
     /**
      * Add a class to the container and record it for destroy() — unless the
      * author already set it, in which case it isn't ours to remove.
-     * @private
-     * @param {string} name
+     * @internal
+     * @param name
      */
-    addOwnClass(name) {
+    addOwnClass(name: string) {
         if (this.container.classList.contains(name)) return;
         this.container.classList.add(name);
         this.ownClasses.push(name);
@@ -564,10 +637,10 @@ export class WaveformPlaylist {
      * Build the hero "now playing" unit: a cover that doubles as the play/pause
      * button, immediately left of the waveform stage, with a current/total time
      * readout beneath the waveform.
-     * @private
-     * @param {HTMLElement} stage - The container the WaveformPlayer renders into.
+     * @internal
+     * @param stage - The container the WaveformPlayer renders into.
      */
-    createHeroLayout(stage) {
+    createHeroLayout(stage: HTMLElement) {
         const first = this.tracks[0];
 
         const hero = document.createElement('div');
@@ -578,7 +651,7 @@ export class WaveformPlaylist {
         // so it sits flush with the waveform column and never balloons to the
         // artwork's native size.
         // Default: the waveform plus the title/artist block above it.
-        const coverSize = (this.options.coverSize || ((this.options.height || 56) + 48)) + 'px';
+        const coverSize = (this.options.coverSize || (((this.options.height as number) || 56) + 48)) + 'px';
         const cover = document.createElement('button');
         cover.type = 'button';
         cover.className = 'wp-hero-cover';
@@ -643,10 +716,10 @@ export class WaveformPlaylist {
      * the FIRST track had artwork, so a playlist opening on an artless track
      * never showed any later cover — and one that did kept showing the
      * previous cover on an artless track. No-op without a hero cover (grid).
-     * @private
-     * @param {string|undefined} src - Artwork URL.
+     * @internal
+     * @param src - Artwork URL.
      */
-    setHeroArt(src) {
+    setHeroArt(src: string | undefined) {
         if (!this.heroCover) return;
 
         if (src) {
@@ -678,10 +751,10 @@ export class WaveformPlaylist {
      * cover (play/pause) + title + waveform + time, in one row below the
      * cover-art grid. Shares the hero* refs so updatePlayState / setActiveTrack
      * / updateHeroTime drive it just like the hero.
-     * @private
-     * @param {HTMLElement} stage - The container the WaveformPlayer renders into.
+     * @internal
+     * @param stage - The container the WaveformPlayer renders into.
      */
-    createNowPlayingBar(stage) {
+    createNowPlayingBar(stage: HTMLElement) {
         const first = this.tracks[0];
 
         const bar = document.createElement('div');
@@ -729,7 +802,7 @@ export class WaveformPlaylist {
      * duration only (no covers, no waveform, no artist), with the active row
      * marked. Reuses the `.wp-item` / `wp-active` machinery the rest of the
      * component already drives.
-     * @private
+     * @internal
      */
     createHeroQueue() {
         const listContainer = document.createElement('div');
@@ -744,7 +817,7 @@ export class WaveformPlaylist {
         this.tracks.forEach((track, index) => {
             const item = document.createElement('li');
             item.className = 'wp-item wp-queue-item';
-            item.dataset.index = index;
+            item.dataset.index = index as any;
 
             // Leading slot: an artwork thumbnail with a play/pause overlay
             // (shown on hover + on the active row), or a track number when the
@@ -768,7 +841,7 @@ export class WaveformPlaylist {
                 const num = document.createElement('span');
                 num.className = 'wp-num';
                 num.setAttribute('aria-hidden', 'true');
-                num.textContent = index + 1;
+                num.textContent = (index + 1) as any;
                 item.appendChild(num);
                 item.appendChild(stateIcon('wp-queue-state wp-queue-state-num'));
             }
@@ -816,7 +889,7 @@ export class WaveformPlaylist {
      * cover with a play/pause overlay + a title; clicking it plays from the
      * start. Reuses the active-track (.wp-item / wp-active) and play-state
      * (.wp-queue-state) machinery the hero already drives.
-     * @private
+     * @internal
      */
     createHeroGrid() {
         const gridContainer = document.createElement('div');
@@ -829,7 +902,7 @@ export class WaveformPlaylist {
             const card = document.createElement('button');
             card.type = 'button';
             card.className = 'wp-item wp-grid-item';
-            card.dataset.index = index;
+            card.dataset.index = index as any;
 
             const cover = document.createElement('span');
             cover.className = 'wp-grid-cover';
@@ -845,7 +918,7 @@ export class WaveformPlaylist {
                 const num = document.createElement('span');
                 num.className = 'wp-grid-num';
                 num.setAttribute('aria-hidden', 'true');
-                num.textContent = index + 1;
+                num.textContent = (index + 1) as any;
                 cover.appendChild(num);
             }
             const overlay = document.createElement('span');
@@ -879,28 +952,28 @@ export class WaveformPlaylist {
 
     /**
      * Toggle play/pause on the active track (the hero cover + active queue row).
-     * @private
+     * @internal
      */
     togglePlay() {
         if (!this.player) return;
         // Use the audio element's own paused state as the ground truth — the
         // player's isPlaying flag can lag, and pausing must be reliable.
-        const audio = this.player.audio;
-        const playing = audio ? !audio.paused : !!this.player.isPlaying;
+        const audio = (this.player as Player).audio;
+        const playing = audio ? !audio.paused : !!(this.player as Player).isPlaying;
         if (playing) {
-            this.player.pause();
+            (this.player as Player).pause();
         } else {
-            this.player.play();
+            (this.player as Player).play();
         }
     }
 
     /**
      * Update the hero time readout from real playback values.
-     * @private
-     * @param {number} current
-     * @param {number} total
+     * @internal
+     * @param current
+     * @param total
      */
-    updateHeroTime(current, total) {
+    updateHeroTime(current: number, total: number) {
         if (!this.heroTime) return;
         const totalStr = (total && isFinite(total))
             ? this.formatTime(total)
@@ -910,10 +983,10 @@ export class WaveformPlaylist {
 
     /**
      * Initialize the WaveformPlayer instance with first track
-     * @private
-     * @param {HTMLElement} container - Container for the player
+     * @internal
+     * @param container - Container for the player
      */
-    initPlayer(container) {
+    initPlayer(container: HTMLElement) {
         const firstTrack = this.tracks[0];
 
         // Smart default: Show chapter markers for single track with chapters
@@ -924,7 +997,7 @@ export class WaveformPlaylist {
         // Merge container options with first track data, minus the options the
         // playlist owns — see PLAYLIST_OWN_OPTIONS for why `layout` in
         // particular must not travel.
-        const forwarded = {...this.options};
+        const forwarded: Record<string, any> = {...this.options};
         PLAYLIST_OWN_OPTIONS.forEach(key => delete forwarded[key]);
 
         const playerOptions = {
@@ -943,7 +1016,9 @@ export class WaveformPlaylist {
         };
 
         // Create player instance
-        this.player = new window.WaveformPlayer(container, playerOptions);
+        // (`as any`: a playlist marker's label is optional, the core's WaveformMarker
+        // requires one.)
+        this.player = new window.WaveformPlayer(container, playerOptions as any);
 
         // The player reclasses its container to `waveform-player`, clobbering the
         // `wp-player` hook the list/minimal now-playing CSS relies on (the inset
@@ -972,11 +1047,11 @@ export class WaveformPlaylist {
      * The core itself resets `artwork` (removed when falsy), `markers` and
      * `waveform` (falsy = decode from the audio) per load.
      *
-     * @private
-     * @param {Object} track - Parsed track.
-     * @returns {{markers: Array<Object>, artwork: (string|undefined), album: string, waveform: (string|number[]|undefined)}}
+     * @internal
+     * @param track - Parsed track.
+     * @returns 
      */
-    trackPlayerOptions(track) {
+    trackPlayerOptions(track: WaveformPlaylistTrack): { markers: WaveformPlaylistMarker[]; artwork: string | undefined; album: string; waveform: string | number[] | undefined } {
         let markers = track.markers;
 
         // Convert chapters to markers if needed (explicit markers win).
@@ -1004,12 +1079,12 @@ export class WaveformPlaylist {
      * on:timeupdate onto them), so a user-supplied callback is chained to run
      * AFTER the playlist's own handling instead of being overwritten by it.
      *
-     * @private
-     * @returns {Object} Callback options for the WaveformPlayer.
+     * @internal
+     * @returns Callback options for the WaveformPlayer.
      */
-    playerCallbacks() {
+    playerCallbacks(): Record<string, any> {
         const user = this.options;
-        const chain = (name, own) => (...args) => {
+        const chain = (name: string, own: (...args: any[]) => void) => (...args: any[]) => {
             own(...args);
             if (typeof user[name] === 'function') user[name](...args);
         };
@@ -1036,9 +1111,9 @@ export class WaveformPlaylist {
                 this.isPlaying = false;
                 this.updatePlayState();
                 // Reset chapter when paused at end
-                if (this.player && this.player.audio) {
-                    const current = this.player.audio.currentTime;
-                    const duration = this.player.audio.duration;
+                if (this.player && (this.player as Player).audio) {
+                    const current = (this.player as Player).audio!.currentTime;
+                    const duration = (this.player as Player).audio!.duration;
                     if (current >= duration - 0.1) {
                         this.currentChapterIndex = -1;
                         this.updateActiveChapter(0);
@@ -1050,7 +1125,7 @@ export class WaveformPlaylist {
 
     /**
      * Update play/pause state on artwork
-     * @private
+     * @internal
      */
     updatePlayState() {
         // Hero/grid: reflect play/pause on the cover overlay and the active
@@ -1065,8 +1140,8 @@ export class WaveformPlaylist {
                 this.heroCover.classList.toggle('is-playing', playing);
             }
             if (this.listElement) {
-                this.listElement.querySelectorAll('.wp-queue-state').forEach((ic) => {
-                    const item = ic.closest('[data-index]');
+                this.listElement.querySelectorAll<HTMLElement>('.wp-queue-state').forEach((ic) => {
+                    const item = ic.closest<HTMLElement>('[data-index]');
                     const i = item ? Number(item.dataset.index) : -1;
                     ic.dataset.state = playing && i === this.currentTrackIndex ? 'playing' : 'play';
                 });
@@ -1079,13 +1154,13 @@ export class WaveformPlaylist {
         // Update all artwork play states. Resolve each overlay's track from
         // its row: only tracks with artwork have a container, so the Nth
         // container is not necessarily track N.
-        this.listElement.querySelectorAll('.wp-artwork-container').forEach((container) => {
-            const row = container.closest('[data-index]');
+        this.listElement!.querySelectorAll('.wp-artwork-container').forEach((container) => {
+            const row = container.closest<HTMLElement>('[data-index]');
             const isActive = !!row && Number(row.dataset.index) === this.currentTrackIndex;
-            const overlay = container.querySelector('.wp-artwork-overlay');
+            const overlay = container.querySelector<HTMLElement>('.wp-artwork-overlay');
             if (overlay) {
                 overlay.style.display = isActive ? 'flex' : 'none';
-                const icon = overlay.querySelector('.wp-state');
+                const icon = overlay.querySelector<HTMLElement>('.wp-state');
                 if (icon) {
                     icon.dataset.state = this.isPlaying && isActive ? 'playing' : 'play';
                 }
@@ -1095,10 +1170,10 @@ export class WaveformPlaylist {
 
     /**
      * Update active chapter based on playback position
-     * @private
-     * @param {number} currentTime - Current playback time in seconds
+     * @internal
+     * @param currentTime - Current playback time in seconds
      */
-    updateActiveChapter(currentTime) {
+    updateActiveChapter(currentTime: number) {
         const track = this.tracks[this.currentTrackIndex];
         if (!track.chapters.length) return;
 
@@ -1121,14 +1196,14 @@ export class WaveformPlaylist {
         // Update UI based on layout
         if (this.tracks.length === 1 && track.chapters.length > 0) {
             // Single track with chapters - update chapter items
-            this.listElement.querySelectorAll('.wp-chapter-item').forEach((item, i) => {
+            this.listElement!.querySelectorAll<HTMLElement>('.wp-chapter-item').forEach((item, i) => {
                 this.setChapterActive(item, i === activeChapterIndex);
             });
         } else if (this.tracks.length > 1 && this.options.expandChapters) {
             // Multiple tracks - update chapters under current track
-            const chapters = this.listElement.querySelector(`.wp-chapters[data-track-index="${this.currentTrackIndex}"]`);
+            const chapters = this.listElement!.querySelector(`.wp-chapters[data-track-index="${this.currentTrackIndex}"]`);
             if (chapters) {
-                chapters.querySelectorAll('.wp-chapter').forEach((item, i) => {
+                chapters.querySelectorAll<HTMLElement>('.wp-chapter').forEach((item, i) => {
                     this.setChapterActive(item, i === activeChapterIndex);
                 });
             }
@@ -1139,10 +1214,10 @@ export class WaveformPlaylist {
      * Warn (once per track) about chapters that start beyond the track's end —
      * a typo'd `data-time` that can never become active. Only checkable once
      * the real duration is known, hence the time-update hook.
-     * @private
-     * @param {number} duration - Track duration in seconds.
+     * @internal
+     * @param duration - Track duration in seconds.
      */
-    checkChapterRange(duration) {
+    checkChapterRange(duration: number) {
         const index = this.currentTrackIndex;
         const track = this.tracks[index];
         if (!track || !(duration > 0) || !Number.isFinite(duration)) return;
@@ -1158,11 +1233,11 @@ export class WaveformPlaylist {
     /**
      * Toggle a chapter row's active styling and its `aria-current` state so the
      * playing chapter is conveyed to assistive technology, not just visually.
-     * @private
-     * @param {HTMLElement} item - Chapter row element
-     * @param {boolean} isActive - Whether this chapter is the active one
+     * @internal
+     * @param item - Chapter row element
+     * @param isActive - Whether this chapter is the active one
      */
-    setChapterActive(item, isActive) {
+    setChapterActive(item: HTMLElement, isActive: boolean) {
         item.classList.toggle('wp-active', isActive);
         if (isActive) {
             item.setAttribute('aria-current', 'true');
@@ -1173,7 +1248,7 @@ export class WaveformPlaylist {
 
     /**
      * Create chapter list UI for single track with chapters
-     * @private
+     * @internal
      */
     createChapterList() {
         const track = this.tracks[0];
@@ -1188,8 +1263,8 @@ export class WaveformPlaylist {
         track.chapters.forEach((chapter, index) => {
             const item = document.createElement('li');
             item.className = 'wp-chapter-item';
-            item.dataset.time = chapter.time;
-            item.dataset.index = index;
+            item.dataset.time = chapter.time as any;
+            item.dataset.index = index as any;
 
             const time = document.createElement('span');
             time.className = 'wp-time';
@@ -1216,25 +1291,25 @@ export class WaveformPlaylist {
      * track list and the hero queue). Returns null when the track has no
      * chapters or `expandChapters` is off. Hidden by default; shown for the
      * active track by setActiveTrack/selectTrack.
-     * @private
-     * @param {Object} track
-     * @param {number} index
-     * @returns {HTMLElement|null}
+     * @internal
+     * @param track
+     * @param index
+     * @returns 
      */
-    buildChapterSublist(track, index) {
+    buildChapterSublist(track: WaveformPlaylistTrack, index: number): HTMLElement | null {
         if (!(track.chapters.length > 0 && this.options.expandChapters)) return null;
 
         const chapters = document.createElement('ul');
         chapters.className = 'wp-chapters';
-        chapters.dataset.trackIndex = index;
+        chapters.dataset.trackIndex = index as any;
         chapters.setAttribute('aria-label', 'Chapters');
         chapters.style.display = 'none';
 
         track.chapters.forEach((chapter, chapterIndex) => {
             const chapterItem = document.createElement('li');
             chapterItem.className = 'wp-chapter';
-            chapterItem.dataset.time = chapter.time;
-            chapterItem.dataset.index = chapterIndex;
+            chapterItem.dataset.time = chapter.time as any;
+            chapterItem.dataset.index = chapterIndex as any;
 
             const time = document.createElement('span');
             time.className = 'wp-chapter-time';
@@ -1259,7 +1334,7 @@ export class WaveformPlaylist {
 
     /**
      * Create track list UI for multiple tracks
-     * @private
+     * @internal
      */
     createTrackList() {
         const listContainer = document.createElement('div');
@@ -1276,7 +1351,7 @@ export class WaveformPlaylist {
             // Create track item
             const item = document.createElement('li');
             item.className = 'wp-item';
-            item.dataset.index = index;
+            item.dataset.index = index as any;
 
             // Track artwork or number indicator
             if (track.artwork) {
@@ -1307,7 +1382,7 @@ export class WaveformPlaylist {
             } else {
                 const indicator = document.createElement('span');
                 indicator.className = 'wp-indicator';
-                indicator.textContent = index + 1;
+                indicator.textContent = (index + 1) as any;
                 // The visible number duplicates the row's position; hide it from
                 // AT so the accessible name stays just the title/artist.
                 indicator.setAttribute('aria-hidden', 'true');
@@ -1345,10 +1420,10 @@ export class WaveformPlaylist {
             this.makeActivatable(item, () => {
                 if (index === this.currentTrackIndex) {
                     // Toggle play/pause on the active track
-                    if (this.player && this.player.isPlaying) {
-                        this.player.pause();
+                    if (this.player && (this.player as Player).isPlaying) {
+                        (this.player as Player).pause();
                     } else if (this.player) {
-                        this.player.play();
+                        (this.player as Player).play();
                     }
                 } else {
                     // Select a different track
@@ -1370,7 +1445,7 @@ export class WaveformPlaylist {
 
     /**
      * Create minimal control buttons UI
-     * @private
+     * @internal
      */
     createMinimalControls() {
         const controls = document.createElement('div');
@@ -1379,7 +1454,7 @@ export class WaveformPlaylist {
         this.tracks.forEach((track, index) => {
             const btn = document.createElement('button');
             btn.className = 'wp-track-btn';
-            btn.dataset.index = index;
+            btn.dataset.index = index as any;
             btn.textContent = track.title;
             // Reflect which track is selected for assistive technology.
             btn.setAttribute('aria-pressed', 'false');
@@ -1396,9 +1471,9 @@ export class WaveformPlaylist {
     /**
      * Select and load a track
      * @public
-     * @param {number} index - Track index to select
+     * @param index - Track index to select
      */
-    selectTrack(index) {
+    selectTrack(index: number) {
         this.loadTrackAt(index, null);
     }
 
@@ -1410,11 +1485,11 @@ export class WaveformPlaylist {
      * report a load synchronously (preload="none" with inline peaks skips
      * every await), so registering afterwards could miss it.
      *
-     * @private
-     * @param {number} index - Track index to select
-     * @param {Function|null} onLoaded - Run after the track's onLoad
+     * @internal
+     * @param index - Track index to select
+     * @param onLoaded - Run after the track's onLoad
      */
-    loadTrackAt(index, onLoaded) {
+    loadTrackAt(index: number, onLoaded: (() => void) | null) {
         if (index < 0 || index >= this.tracks.length) return;
 
         const track = this.tracks[index];
@@ -1431,7 +1506,7 @@ export class WaveformPlaylist {
         // Load track into player. Callbacks were set at construction and
         // survive the core's option merge, so only per-track data travels.
         if (this.player) {
-            this.player.loadTrack(track.url, track.title, track.artist, this.trackPlayerOptions(track));
+            (this.player as Player).loadTrack(track.url!, track.title, track.artist, this.trackPlayerOptions(track) as any);
         }
 
         // Update UI (setActiveTrack also reveals this track's chapter sublist).
@@ -1446,11 +1521,11 @@ export class WaveformPlaylist {
 
     /**
      * Remove the active styling / `aria-current` from every chapter row.
-     * @private
+     * @internal
      */
     clearChapterHighlights() {
         if (!this.listElement) return;
-        this.listElement.querySelectorAll('.wp-chapter, .wp-chapter-item').forEach((item) => {
+        this.listElement.querySelectorAll<HTMLElement>('.wp-chapter, .wp-chapter-item').forEach((item) => {
             this.setChapterActive(item, false);
         });
     }
@@ -1458,10 +1533,10 @@ export class WaveformPlaylist {
     /**
      * Seek to a specific chapter within a track
      * @public
-     * @param {number} trackIndex - Track index
-     * @param {number} time - Time in seconds to seek to
+     * @param trackIndex - Track index
+     * @param time - Time in seconds to seek to
      */
-    seekToChapter(trackIndex, time) {
+    seekToChapter(trackIndex: number, time: number) {
         if (!this.player) return;
 
         // Same track - seek straight away (or as soon as the duration is known).
@@ -1490,11 +1565,11 @@ export class WaveformPlaylist {
      * started — which fetches the metadata — and the seek runs on
      * `loadedmetadata` (cancelled like any other pending action).
      *
-     * @private
-     * @param {number} time - Time in seconds
+     * @internal
+     * @param time - Time in seconds
      */
-    seekAndPlay(time) {
-        const player = this.player;
+    seekAndPlay(time: number) {
+        const player = this.player as Player | null;
         if (!player) return;
 
         const audio = player.audio;
@@ -1523,10 +1598,10 @@ export class WaveformPlaylist {
     /**
      * Resolve the pending post-load action, if the load that just finished is
      * the one it was waiting for. Wired to the player's `onLoad`.
-     * @private
-     * @param {Object} [player] - The player that loaded.
+     * @internal
+     * @param player - The player that loaded.
      */
-    resolvePending(player) {
+    resolvePending(player?: Record<string, any>) {
         const pending = this.pending;
         if (!pending || !pending.onLoad) return;
         const url = player && player.options ? player.options.url : undefined;
@@ -1538,7 +1613,7 @@ export class WaveformPlaylist {
     /**
      * Drop the pending post-load action (there is only ever one). Called when
      * another track is selected, when a load fails, and on destroy().
-     * @private
+     * @internal
      */
     cancelPending() {
         const pending = this.pending;
@@ -1548,20 +1623,20 @@ export class WaveformPlaylist {
 
     /**
      * Update active track UI state
-     * @private
-     * @param {number} index - Track index to mark as active
+     * @internal
+     * @param index - Track index to mark as active
      */
-    setActiveTrack(index) {
+    setActiveTrack(index: number) {
         if (this.isMinimal) {
             // Minimal layout - update buttons
-            this.listElement.querySelectorAll('.wp-track-btn').forEach((btn, i) => {
+            this.listElement!.querySelectorAll('.wp-track-btn').forEach((btn, i) => {
                 const isActive = i === index;
                 btn.classList.toggle('wp-active', isActive);
                 btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
             });
         } else if (this.tracks.length > 1 || this.isGrid) {
             // Track list / grid - update items (grid highlights even a single card)
-            this.listElement.querySelectorAll('.wp-item').forEach((item, i) => {
+            this.listElement!.querySelectorAll('.wp-item').forEach((item, i) => {
                 const isActive = i === index;
                 item.classList.toggle('wp-active', isActive);
                 // aria-current marks the playing track for screen-reader users.
@@ -1592,7 +1667,7 @@ export class WaveformPlaylist {
         // hidden until a track change). Matched by data-track-index, not
         // position: not every track has chapters, so sublist N isn't track N.
         if (this.options.expandChapters && this.tracks.length > 1 && this.listElement) {
-            this.listElement.querySelectorAll('.wp-chapters').forEach((ch) => {
+            this.listElement.querySelectorAll<HTMLElement>('.wp-chapters').forEach((ch) => {
                 ch.style.display = Number(ch.dataset.trackIndex) === index ? 'block' : 'none';
             });
         }
@@ -1601,7 +1676,7 @@ export class WaveformPlaylist {
 
     /**
      * Handle track end event
-     * @private
+     * @internal
      */
     onTrackEnd() {
         // Reset chapter highlighting to beginning
@@ -1636,7 +1711,7 @@ export class WaveformPlaylist {
 
     /**
      * Bind keyboard shortcuts for navigation
-     * @private
+     * @internal
      */
     bindKeyboard() {
         // Store the bound handler so destroy() can remove it. A document-level
@@ -1649,7 +1724,7 @@ export class WaveformPlaylist {
             // playlist container). Tracking both lets us tell "playlist UI" from
             // "player" focus below.
             const playlistHasFocus = this.container.contains(active);
-            const playerHasFocus = !!this.player?.container.contains(active);
+            const playerHasFocus = !!(this.player as Player | null)?.container.contains(active);
 
             // Only act when this playlist (or its own player) holds focus, so
             // multiple playlists on the same page never cross-fire.
@@ -1708,11 +1783,11 @@ export class WaveformPlaylist {
      * Without this, the clickable track and chapter rows are mouse-only and
      * invisible to keyboard and screen-reader users.
      *
-     * @private
-     * @param {HTMLElement} el - Element to make activatable
-     * @param {Function} onActivate - Handler run on click / Enter / Space; receives the originating event
+     * @internal
+     * @param el - Element to make activatable
+     * @param onActivate - Handler run on click / Enter / Space; receives the originating event
      */
-    makeActivatable(el, onActivate) {
+    makeActivatable(el: HTMLElement, onActivate: (e?: Event) => void) {
         el.setAttribute('role', 'button');
         el.tabIndex = 0;
         el.addEventListener('click', onActivate);
@@ -1737,11 +1812,11 @@ export class WaveformPlaylist {
      * Hour-long chapters need `H:MM:SS`, which used to read as just the hour
      * (`"1:05:30"` → 1 second).
      *
-     * @private
-     * @param {string} timeStr - Time string: "SS", "M:SS" or "H:MM:SS"
-     * @returns {number} Time in seconds, or 0 when unparseable
+     * @internal
+     * @param timeStr - Time string: "SS", "M:SS" or "H:MM:SS"
+     * @returns Time in seconds, or 0 when unparseable
      */
-    parseTime(timeStr) {
+    parseTime(timeStr: string): number {
         const parts = String(timeStr ?? '').trim().split(':');
         // An empty field ("1::30") would coerce to 0 and pass as valid.
         if (parts.length > 3 || (parts.length > 1 && parts.some(p => p.trim() === ''))) return 0;
@@ -1752,11 +1827,11 @@ export class WaveformPlaylist {
 
     /**
      * Format seconds to time string
-     * @private
-     * @param {number} seconds - Time in seconds
-     * @returns {string} Formatted time string "M:SS"
+     * @internal
+     * @param seconds - Time in seconds
+     * @returns Formatted time string "M:SS"
      */
-    formatTime(seconds) {
+    formatTime(seconds: number): string {
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
         return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -1764,11 +1839,11 @@ export class WaveformPlaylist {
 
     /**
      * Extract title from URL filename
-     * @private
-     * @param {string} url - Audio file URL
-     * @returns {string} Extracted title
+     * @internal
+     * @param url - Audio file URL
+     * @returns Extracted title
      */
-    extractTitleFromUrl(url) {
+    extractTitleFromUrl(url: string | undefined): string {
         if (!url) return 'Untitled';
         const parts = url.split('/');
         const filename = parts[parts.length - 1];
@@ -1777,37 +1852,37 @@ export class WaveformPlaylist {
 
     /**
      * Generate unique ID
-     * @private
-     * @returns {string} Random ID string
+     * @internal
+     * @returns Random ID string
      */
-    generateId() {
+    generateId(): string {
         return Math.random().toString(36).substring(2, 9);
     }
 
     /**
      * Get current player instance
      * @public
-     * @returns {WaveformPlayer|null} The WaveformPlayer instance
+     * @returns The WaveformPlayer instance
      */
-    getPlayer() {
+    getPlayer(): unknown | null {
         return this.player;
     }
 
     /**
      * Get current track index
      * @public
-     * @returns {number} Current track index
+     * @returns Current track index
      */
-    getCurrentTrackIndex() {
+    getCurrentTrackIndex(): number {
         return this.currentTrackIndex;
     }
 
     /**
      * Get all tracks
      * @public
-     * @returns {Array} Array of track objects
+     * @returns Array of track objects
      */
-    getTracks() {
+    getTracks(): WaveformPlaylistTrack[] {
         return this.tracks;
     }
 
@@ -1828,7 +1903,7 @@ export class WaveformPlaylist {
 
         // Destroy player instance
         if (this.player) {
-            this.player.destroy();
+            (this.player as Player).destroy();
         }
 
         // Remove only what init() generated. This used to wipe innerHTML
@@ -1866,7 +1941,7 @@ export class WaveformPlaylist {
 function autoInit() {
     if (typeof document === 'undefined') return;
 
-    const elements = document.querySelectorAll('[data-waveform-playlist]');
+    const elements = document.querySelectorAll<HTMLElement>('[data-waveform-playlist]');
     elements.forEach(element => {
         if (element.dataset.waveformPlaylistInitialized === 'true') return;
 
