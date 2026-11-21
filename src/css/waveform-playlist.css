@@ -188,8 +188,12 @@
     background: color-mix(in srgb, currentColor 7%, transparent);
 }
 
+/* Every cover image fills its frame. Absolutely positioned so the image never
+   contributes to the flex width. */
 .wp-artwork,
-.wp-queue-thumb-art {
+.wp-queue-thumb-art,
+.wp-hero-art,
+.wp-grid-art {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -292,6 +296,8 @@
     padding: 0;
 }
 
+/* Both kinds of chapter row start on the TITLE line: under a track they read
+   as parts of it; a single chaptered track's chapters ARE the list. */
 .wp-chapter,
 .wp-chapters-only .wp-chapter-item {
     position: relative;
@@ -299,23 +305,19 @@
     align-items: center;
     gap: var(--wp-gap);
     min-height: 2.25rem;
-    padding: 0.25rem var(--wp-inset);
+    padding: 0.25rem var(--wp-inset) 0.25rem calc(var(--wp-inset) + var(--wp-thumb-size) + var(--wp-gap));
     border-radius: var(--wp-radius);
     color: var(--wp-muted);
     cursor: pointer;
     transition: background-color 0.15s, color 0.15s;
 }
 
-/* Chapters under a track start on the TITLE line: they read as parts of it. */
 .wp-chapter {
-    padding-left: calc(var(--wp-inset) + var(--wp-thumb-size) + var(--wp-gap));
     font-size: 0.875rem;
 }
 
-/* A single chaptered track: the chapters ARE the list. */
 .wp-chapters-only .wp-chapter-item {
     min-height: 2.75rem;
-    padding-left: calc(var(--wp-inset) + var(--wp-thumb-size) + var(--wp-gap));
     font-size: 0.9375rem;
 }
 
@@ -447,15 +449,6 @@
     color: inherit;
 }
 
-/* Absolutely positioned so the image never contributes to the flex width. */
-.wp-hero-art {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
 /* The glyph sits in a dark disc, so the artwork itself is never dimmed — and
    the disc, not a scrim over the whole cover, is what holds the contrast. */
 .wp-hero-overlay {
@@ -569,31 +562,6 @@
 }
 
 /* ==========================================================================
-   Density (compact) — rows, thumbnails and chapters scale down together.
-   ========================================================================== */
-
-.wp-density-compact {
-    --wp-row-height: 2.5rem;
-    --wp-thumb-size: 28px;
-    --wp-gap: 0.75rem;
-}
-
-.wp-density-compact .wp-item {
-    padding-top: 0.25rem;
-    padding-bottom: 0.25rem;
-}
-
-.wp-density-compact .wp-title,
-.wp-density-compact .wp-chapters-only .wp-chapter-item {
-    font-size: 0.875rem;
-}
-
-.wp-density-compact .wp-chapter {
-    min-height: 1.875rem;
-    font-size: 0.8125rem;
-}
-
-/* ==========================================================================
    Cover position: top — the cover above a full-width waveform.
    ========================================================================== */
 
@@ -644,14 +612,6 @@
     overflow: hidden;
     background: color-mix(in srgb, currentColor 7%, transparent);
     border: 1px solid var(--wp-line);
-}
-
-.wp-grid-art {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
 }
 
 /* The glyph's disc (as on the hero cover): shown on hover, focus and the
@@ -738,6 +698,31 @@
 
 .wp-now-bar > .waveform-player {
     margin: 0;
+}
+
+/* ==========================================================================
+   Density (compact) — rows, thumbnails and chapters scale down together.
+   ========================================================================== */
+
+.wp-density-compact {
+    --wp-row-height: 2.5rem;
+    --wp-thumb-size: 28px;
+    --wp-gap: 0.75rem;
+}
+
+.wp-density-compact .wp-item {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+.wp-density-compact .wp-title,
+.wp-density-compact .wp-chapters-only .wp-chapter-item {
+    font-size: 0.875rem;
+}
+
+.wp-density-compact .wp-chapter {
+    min-height: 1.875rem;
+    font-size: 0.8125rem;
 }
 
 /* ==========================================================================
