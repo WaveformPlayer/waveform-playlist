@@ -51,6 +51,9 @@ describe('element registration', () => {
 			mod.WaveformPlaylist.init();
 			expect(MockWaveformPlayer.instances).toHaveLength(1);
 			mod.defineWaveformPlaylistElement('opted-out-playlist');
+			// A <script> page reaches the same definer through the global.
+			expect(window.WaveformPlaylist.defineElement('global-defined-playlist')).toBeTypeOf('function');
+			expect(customElements.get('global-defined-playlist')).toBeTypeOf('function');
 			document.body.insertAdjacentHTML('beforeend', `<opted-out-playlist>${TRACKS}</opted-out-playlist>`);
 			expect(document.querySelector('opted-out-playlist').playlist).toBeInstanceOf(mod.WaveformPlaylist);
 		} finally {

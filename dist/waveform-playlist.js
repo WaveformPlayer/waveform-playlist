@@ -1654,6 +1654,7 @@
     });
   }
   WaveformPlaylist.init = autoInit;
+  WaveformPlaylist.defineElement = defineWaveformPlaylistElement;
   if (typeof window !== "undefined") {
     window.WaveformPlaylist = WaveformPlaylist;
   }

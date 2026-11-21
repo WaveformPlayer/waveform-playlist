@@ -207,6 +207,13 @@ export class WaveformPlaylist {
     declare static init: () => void;
 
     /**
+     * Register the `<waveform-playlist>` element (default tag `waveform-playlist`)
+     * from the global — the way in for a `<script>` page that opted out of
+     * auto-init. Attached by entry.ts.
+     */
+    declare static defineElement: (name?: string) => CustomElementConstructor | undefined;
+
+    /**
      * Create a new WaveformPlaylist instance
      *
      * @param {string|HTMLElement} container - Container element or CSS selector

@@ -15,7 +15,7 @@
  */
 
 import {WaveformPlaylist, instances} from './playlist.js';
-import {WaveformPlaylistElement} from './element.js';
+import {WaveformPlaylistElement, defineWaveformPlaylistElement} from './element.js';
 
 /**
  * Initialise every `[data-waveform-playlist]` element not already claimed —
@@ -42,6 +42,8 @@ function autoInit() {
 
 // Add static init method
 WaveformPlaylist.init = autoInit;
+// And the element definer, for script-tag pages that opted out of auto-init.
+WaveformPlaylist.defineElement = defineWaveformPlaylistElement;
 
 // Export for browser usage
 if (typeof window !== 'undefined') {

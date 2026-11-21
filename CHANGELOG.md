@@ -10,6 +10,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`WaveformPlaylist.defineElement(name?)`** registers `<waveform-playlist>`
+  from the global, for a `<script>` page that opted out of auto-init.
+
 - **`<waveform-playlist>` custom element.** Light DOM: the element is the
   playlist's container, so its `[data-track]` / `[data-chapter]` children are
   written exactly as inside `data-waveform-playlist`, the stylesheet applies
