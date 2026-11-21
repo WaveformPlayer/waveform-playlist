@@ -6,6 +6,21 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.0] — Unreleased
+
+### Fixed
+
+- **Compact density keeps its 28px thumbnails on phones.** Below 480px the
+  narrow-screen rule's 32px lead column overrode `density: 'compact'`, so
+  compact lists got bigger thumbnails on the smallest screens.
+
+### Changed
+
+- **Written in TypeScript**, with generated type declarations (`types/`).
+- **CSS tidied for the 2.0 browser floor** (Chrome/Edge 111, Firefox 114,
+  Safari 16.4): declarations that could never apply are gone and repeated
+  rules are merged. Rendering is unchanged.
+
 ## [1.9.0] — 2026-10-07
 
 ### Changed

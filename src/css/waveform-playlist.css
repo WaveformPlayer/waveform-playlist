@@ -736,6 +736,12 @@
         --wp-thumb-size: 32px;
     }
 
+    /* Compact keeps its smaller lead column: same specificity as the rule
+       above, so it must come after it. */
+    .wp-density-compact {
+        --wp-thumb-size: 28px;
+    }
+
     .wp-hero {
         gap: 0.75rem;
     }

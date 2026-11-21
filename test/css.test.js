@@ -145,3 +145,16 @@ describe('vendor prefixes', () => {
 		expect(prefixed).toEqual(plain);
 	});
 });
+
+describe('compact density on narrow screens', () => {
+	// .waveform-playlist and .wp-density-compact sit on the same element with
+	// equal specificity, so the phone rule's --wp-thumb-size beat compact's 28px
+	// (2.0 fix). Compact's override must come after it inside the media query.
+	it('re-applies the compact lead column after the narrow-screen default', () => {
+		const media = CSS.match(/@media \(max-width: 480px\) \{([\s\S]*)\}\s*$/)?.[1] ?? '';
+		const base = media.search(/\.waveform-playlist\s*\{[^}]*--wp-thumb-size/);
+		const compact = media.search(/\.wp-density-compact\s*\{[^}]*--wp-thumb-size:\s*28px/);
+		expect(base).toBeGreaterThan(-1);
+		expect(compact).toBeGreaterThan(base);
+	});
+});
