@@ -43,11 +43,26 @@ export interface WaveformPlaylistTrack {
     artwork?: string;
     /** Album name. */
     album?: string;
-    /** Human-readable duration (e.g. "3:45"). */
+    /**
+     * Display duration from `data-duration`, shown in the list and the hero
+     * readout: as written (`"3:45"`), or formatted when the attribute is a bare
+     * count of seconds (`"225"` → `"3:45"`).
+     */
     duration?: string;
     /**
+     * The same `data-duration` in seconds, passed to the player as its
+     * `duration` option so the track has a length before its audio's metadata
+     * loads (with `preload: 'none'`, until playback starts).
+     */
+    durationSeconds?: number;
+    /** Download link target (`data-download-url`); the player defaults to the track url. */
+    downloadUrl?: string;
+    /** Suggested download file name (`data-download-name`); the player defaults to the url's file name. */
+    downloadName?: string;
+    /**
      * Pre-computed peaks from `data-waveform`: a parsed JSON array, or a
-     * source string (e.g. a `.json` peaks URL) the player resolves itself.
+     * source string the player resolves itself — a `.json` peaks URL, a
+     * comma-separated list, or compact `wp1:` peaks.
      */
     waveform?: number[] | string;
     /** Chapters belonging to this track. */
@@ -65,8 +80,15 @@ export interface WaveformPlaylistTrack {
  * instance (e.g. `height`, `waveformStyle`, `colorPreset`, `barWidth`,
  * `autoplay`, ...), including its callbacks (`onPlay`, `onPause`, `onEnd`,
  * `onTimeUpdate`, `onLoad`, `onError`, `onNextTrack`, `onPreviousTrack`),
- * which run after the playlist's own handling. `audioMode` is ignored: the
- * playlist always owns its audio.
+ * which run after the playlist's own handling.
+ *
+ * Never forwarded, from the constructor or the container's `data-*`:
+ * - `audioMode` — the playlist always owns its audio.
+ * - `loop` — a looping track never fires `ended`, which breaks `continuous`
+ *   auto-advance.
+ * - `showLoop` — its button turns on that same loop, so it would play the
+ *   current track forever.
+ * - `lazy` — the playlist loads its player's tracks itself.
  */
 export interface WaveformPlaylistOptions {
     /**
@@ -111,3 +133,4 @@ export interface WaveformPlaylistOptions {
     /** Any additional WaveformPlayer option is passed through. */
     [option: string]: unknown;
 }
+//# sourceMappingURL=types.d.ts.map

@@ -1,5 +1,6 @@
+"use strict";
 (() => {
-  // src/js/index.js
+  // src/js/index.ts
   var ARTWORK_FALLBACK = "data:image/svg+xml," + encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="4" fill="#71717a" fill-opacity="0.15"/><g fill="none" stroke="#a1a1aa" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="17" r="2.2"/><circle cx="17" cy="15" r="2.2"/><path d="M10.2 17V7l9-1.6v9"/></g></svg>'
   );
@@ -17,6 +18,19 @@
     "barPosition",
     "showChapterMarkers",
     "chapterMarkerColor"
+  ];
+  var NOT_FORWARDED = ["audioMode", "loop", "showLoop", "lazy"];
+  var PER_TRACK_OPTIONS = [
+    "url",
+    "title",
+    "artist",
+    "album",
+    "artwork",
+    "markers",
+    "waveform",
+    "duration",
+    "downloadUrl",
+    "downloadName"
   ];
   var ICONS = {
     play: '<svg class="wp-i wp-i-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.6v12.8a1 1 0 0 0 1.5.86l10.6-6.4a1 1 0 0 0 0-1.72L9.5 4.74A1 1 0 0 0 8 5.6z"/></svg>',
@@ -58,8 +72,9 @@
      * @param {string} [options.barPosition='bottom'] - Grid now-playing bar position: 'top' or 'bottom'
      *
      * Any other option is forwarded to the embedded WaveformPlayer, including
-     * its callbacks (chained after the playlist's own). `audioMode` is ignored:
-     * the playlist always owns its audio.
+     * its callbacks (chained after the playlist's own). `audioMode`, `loop`,
+     * `showLoop` and `lazy` are never forwarded (see NOT_FORWARDED): the
+     * playlist owns its audio, and a looping player never ends a track.
      * @throws {Error} If container not found or WaveformPlayer not available
      */
     constructor(container, options = {}) {
@@ -89,17 +104,17 @@
     }
     /**
      * Parse options from container data attributes and merge with provided options
-     * @private
-     * @param {Object} providedOptions - Options passed to constructor
-     * @returns {Object} Merged options object
+     * @internal
+     * @param providedOptions - Options passed to constructor
+     * @returns Merged options object
      */
     parseOptions(providedOptions) {
       const container = this.container;
       const ds = container.dataset;
       const options = { ...providedOptions };
-      delete options.audioMode;
-      const fromData = this.parsePlayerDataAttributes(container);
-      ["audioMode", "url", "title", "artist", "album", "artwork", "markers", "waveform"].forEach((key) => delete fromData[key]);
+      NOT_FORWARDED.forEach((key) => delete options[key]);
+      const fromData = { ...window.WaveformPlayer.utils.parseDataAttributes(container) };
+      [...NOT_FORWARDED, ...PER_TRACK_OPTIONS].forEach((key) => delete fromData[key]);
       Object.assign(options, fromData);
       const flag = (key, fallback) => ds[key] !== void 0 ? ds[key] !== "false" : options[key] ?? fallback;
       options.layout = ds.layout || options.layout || "list";
@@ -118,135 +133,6 @@
       return options;
     }
     /**
-     * Read the player's `data-*` option surface off the container.
-     *
-     * Prefers the core's own parser (`WaveformPlayer.utils.parseDataAttributes`)
-     * so the playlist inherits the complete, current contract and never drifts
-     * as the player gains options. Falls back to a local parser only for cores
-     * older than the one that exposes the bridge helper.
-     *
-     * @private
-     * @param {HTMLElement} container - The playlist container element
-     * @returns {Object} Sparse player options parsed from the container's data-*
-     */
-    parsePlayerDataAttributes(container) {
-      const utils = typeof window !== "undefined" && window.WaveformPlayer && window.WaveformPlayer.utils;
-      if (utils && typeof utils.parseDataAttributes === "function") {
-        return { ...utils.parseDataAttributes(container) };
-      }
-      return this.parsePlayerDataAttributesFallback(container);
-    }
-    /**
-     * Container-level `data-*` parser used only with cores that predate
-     * `WaveformPlayer.utils.parseDataAttributes`. Mirrors the player's
-     * container-relevant options with correct dataset keys and per-key coercion.
-     *
-     * Note: the dataset key for `data-show-bpm` is `showBpm`, which maps to the
-     * `showBPM` option. Reading `dataset.showBPM` would target the wrong
-     * attribute (`data-show-b-p-m`) and silently drop the flag.
-     *
-     * @private
-     * @param {HTMLElement} container - The playlist container element
-     * @returns {Object} Sparse player options parsed from the container's data-*
-     */
-    parsePlayerDataAttributesFallback(container) {
-      const ds = container.dataset;
-      const opts = {};
-      const str = (k, o = k) => {
-        if (ds[k]) opts[o] = ds[k];
-      };
-      const bool = (k, o = k) => {
-        if (ds[k] !== void 0) opts[o] = ds[k] === "true";
-      };
-      const color = (k, o = k) => {
-        if (!ds[k]) return;
-        let value = ds[k];
-        if (value.trim().startsWith("[")) {
-          try {
-            value = JSON.parse(value);
-          } catch (e) {
-          }
-        }
-        opts[o] = value;
-      };
-      const length = (k, o = k) => {
-        if (!ds[k]) return;
-        opts[o] = /^\d+(\.\d+)?$/.test(ds[k].trim()) ? parseFloat(ds[k]) : ds[k];
-      };
-      const num = (k, o, parse) => {
-        if (!ds[k]) return;
-        const n = parse(ds[k]);
-        if (Number.isFinite(n)) opts[o] = n;
-        else console.warn(`[WaveformPlaylist] Invalid ${k} attribute, expected a number:`, ds[k]);
-      };
-      const int = (k, o = k) => num(k, o, (v) => parseInt(v, 10));
-      const float = (k, o = k) => num(k, o, parseFloat);
-      const jsonArray = (k, o = k) => {
-        if (!ds[k]) return;
-        let parsed;
-        try {
-          parsed = JSON.parse(ds[k]);
-        } catch (e) {
-          console.warn(`[WaveformPlaylist] Invalid ${k} JSON:`, e);
-          return;
-        }
-        if (Array.isArray(parsed)) opts[o] = parsed;
-        else console.warn(`[WaveformPlaylist] Invalid ${k} attribute, expected a JSON array:`, ds[k]);
-      };
-      str("style", "waveformStyle");
-      str("waveformStyle");
-      str("waveformGradient");
-      int("barWidth");
-      int("barSpacing");
-      int("barRadius");
-      str("buttonAlign");
-      str("buttonStyle");
-      length("buttonSize");
-      length("buttonRadius");
-      int("height");
-      int("samples");
-      str("preload");
-      str("crossOrigin");
-      str("artworkPosition");
-      str("colorPreset");
-      color("waveformColor");
-      color("progressColor");
-      str("color", "waveformColor");
-      str("theme", "colorPreset");
-      str("buttonColor");
-      str("buttonHoverColor");
-      str("textColor");
-      str("textSecondaryColor");
-      str("backgroundColor");
-      str("borderColor");
-      bool("autoplay");
-      bool("showControls");
-      bool("showInfo");
-      bool("showTime");
-      bool("showHoverTime");
-      bool("seekHandle");
-      bool("showBpm", "showBPM");
-      int("bpm");
-      bool("singlePlay");
-      bool("playOnSeek");
-      bool("showPlaybackSpeed");
-      bool("enableMediaSession");
-      bool("showMarkers");
-      bool("accessibleSeek");
-      float("playbackRate");
-      jsonArray("playbackRates");
-      str("seekLabel");
-      str("seekValueText");
-      str("errorText");
-      str("playPauseLabel");
-      str("speedLabel");
-      str("artworkAlt");
-      str("unknownTrackText");
-      str("playIcon");
-      str("pauseIcon");
-      return opts;
-    }
-    /**
      * Parse a track's `data-markers` attribute into renderable markers.
      *
      * Every track's attribute is read during `parseTracks()`, which runs before
@@ -259,9 +145,9 @@
      * `.length`/`.map()` downstream, and a marker whose `time` isn't a number
      * renders at `left: NaN%`.
      *
-     * @private
-     * @param {string|undefined} raw - Raw `data-markers` value.
-     * @returns {Array<Object>} Renderable markers (empty when nothing survives).
+     * @internal
+     * @param raw - Raw `data-markers` value.
+     * @returns Renderable markers (empty when nothing survives).
      */
     parseMarkers(raw) {
       if (!raw) return [];
@@ -283,12 +169,13 @@
      *
      * A JSON array is parsed here so a typo costs that one track its peaks
      * (the player then decodes the audio) rather than reaching the player as
-     * a string; anything else — a `.json` peaks URL, or a comma-separated
-     * list — is passed through for the core to resolve, which it already does.
+     * a string; anything else — a `.json` peaks URL, a comma-separated list
+     * or compact `wp1:` peaks — is passed through for the core to resolve
+     * (a malformed `wp1:` string is unusable peaks there, never an error).
      *
-     * @private
-     * @param {string|undefined} raw - Raw `data-waveform` value.
-     * @returns {number[]|string|undefined} Peaks, a peaks source, or undefined.
+     * @internal
+     * @param raw - Raw `data-waveform` value.
+     * @returns Peaks, a peaks source, or undefined.
      */
     parseWaveform(raw) {
       const value = (raw || "").trim();
@@ -303,8 +190,32 @@
       return void 0;
     }
     /**
+     * Parse a track's `data-duration`: `"3:45"`, `"1:02:03"` or a bare count
+     * of seconds (`"225"`, the core's own `data-duration` form).
+     *
+     * The text is what the list and the hero readout show — a bare count is
+     * formatted (`"3:45"`), anything else is shown as written, as in 1.x. The
+     * seconds go to the player as its `duration` option, so the time readout,
+     * markers and seeks have a length before the audio's metadata arrives.
+     *
+     * @internal
+     * @param raw - Raw `data-duration` value.
+     * @returns The display text and the length in seconds (each undefined
+     *   when there is none).
+     */
+    parseDuration(raw) {
+      const value = (raw || "").trim();
+      if (!value) return { text: void 0, seconds: void 0 };
+      const seconds = this.parseTime(value);
+      const bare = /^\d+(\.\d+)?$/.test(value);
+      return {
+        text: bare ? this.formatTime(seconds) : value,
+        seconds: seconds > 0 ? seconds : void 0
+      };
+    }
+    /**
      * Parse tracks and chapters from container markup
-     * @private
+     * @internal
      */
     parseTracks() {
       const trackElements = this.container.querySelectorAll("[data-track]");
@@ -321,6 +232,7 @@
             element: ch
           };
         }).sort((a, b) => a.time - b.time);
+        const duration = this.parseDuration(el.dataset.duration);
         return {
           element: el,
           index,
@@ -329,7 +241,10 @@
           artist: el.dataset.artist || "",
           artwork: el.dataset.artwork,
           album: el.dataset.album,
-          duration: el.dataset.duration,
+          duration: duration.text,
+          durationSeconds: duration.seconds,
+          downloadUrl: el.dataset.downloadUrl || void 0,
+          downloadName: el.dataset.downloadName || void 0,
           waveform: this.parseWaveform(el.dataset.waveform),
           chapters,
           // Parse explicit markers if provided (separate from chapters)
@@ -339,7 +254,7 @@
     }
     /**
      * Initialize the playlist UI and player
-     * @private
+     * @internal
      */
     init() {
       this.ownNodes = [];
@@ -403,8 +318,8 @@
     }
     /**
      * Append a generated node to the container and record it for destroy().
-     * @private
-     * @param {HTMLElement} node
+     * @internal
+     * @param node
      */
     appendOwn(node) {
       this.container.appendChild(node);
@@ -413,8 +328,8 @@
     /**
      * Add a class to the container and record it for destroy() — unless the
      * author already set it, in which case it isn't ours to remove.
-     * @private
-     * @param {string} name
+     * @internal
+     * @param name
      */
     addOwnClass(name) {
       if (this.container.classList.contains(name)) return;
@@ -425,8 +340,8 @@
      * Build the hero "now playing" unit: a cover that doubles as the play/pause
      * button, immediately left of the waveform stage, with a current/total time
      * readout beneath the waveform.
-     * @private
-     * @param {HTMLElement} stage - The container the WaveformPlayer renders into.
+     * @internal
+     * @param stage - The container the WaveformPlayer renders into.
      */
     createHeroLayout(stage) {
       const first = this.tracks[0];
@@ -484,8 +399,8 @@
      * the FIRST track had artwork, so a playlist opening on an artless track
      * never showed any later cover — and one that did kept showing the
      * previous cover on an artless track. No-op without a hero cover (grid).
-     * @private
-     * @param {string|undefined} src - Artwork URL.
+     * @internal
+     * @param src - Artwork URL.
      */
     setHeroArt(src) {
       if (!this.heroCover) return;
@@ -512,8 +427,8 @@
      * cover (play/pause) + title + waveform + time, in one row below the
      * cover-art grid. Shares the hero* refs so updatePlayState / setActiveTrack
      * / updateHeroTime drive it just like the hero.
-     * @private
-     * @param {HTMLElement} stage - The container the WaveformPlayer renders into.
+     * @internal
+     * @param stage - The container the WaveformPlayer renders into.
      */
     createNowPlayingBar(stage) {
       const first = this.tracks[0];
@@ -551,7 +466,7 @@
      * duration only (no covers, no waveform, no artist), with the active row
      * marked. Reuses the `.wp-item` / `wp-active` machinery the rest of the
      * component already drives.
-     * @private
+     * @internal
      */
     createHeroQueue() {
       const listContainer = document.createElement("div");
@@ -620,7 +535,7 @@
      * cover with a play/pause overlay + a title; clicking it plays from the
      * start. Reuses the active-track (.wp-item / wp-active) and play-state
      * (.wp-queue-state) machinery the hero already drives.
-     * @private
+     * @internal
      */
     createHeroGrid() {
       const gridContainer = document.createElement("div");
@@ -672,7 +587,7 @@
     }
     /**
      * Toggle play/pause on the active track (the hero cover + active queue row).
-     * @private
+     * @internal
      */
     togglePlay() {
       if (!this.player) return;
@@ -686,9 +601,9 @@
     }
     /**
      * Update the hero time readout from real playback values.
-     * @private
-     * @param {number} current
-     * @param {number} total
+     * @internal
+     * @param current
+     * @param total
      */
     updateHeroTime(current, total) {
       if (!this.heroTime) return;
@@ -697,8 +612,8 @@
     }
     /**
      * Initialize the WaveformPlayer instance with first track
-     * @private
-     * @param {HTMLElement} container - Container for the player
+     * @internal
+     * @param container - Container for the player
      */
     initPlayer(container) {
       const firstTrack = this.tracks[0];
@@ -736,12 +651,14 @@
      * Every key is always present, because the core merges loadTrack() options
      * over the previous track's and skips `undefined`: an absent album used to
      * leave the previous track's album on the lock screen / Media Session.
-     * The core itself resets `artwork` (removed when falsy), `markers` and
-     * `waveform` (falsy = decode from the audio) per load.
+     * The core itself resets `artwork` (removed when falsy), `markers`,
+     * `waveform` (falsy = decode from the audio), `duration`, `downloadUrl`
+     * and `downloadName` (absent = the core's default: the audio's own length,
+     * the track url and its file name) per load.
      *
-     * @private
-     * @param {Object} track - Parsed track.
-     * @returns {{markers: Array<Object>, artwork: (string|undefined), album: string, waveform: (string|number[]|undefined)}}
+     * @internal
+     * @param track - Parsed track.
+     * @returns 
      */
     trackPlayerOptions(track) {
       let markers = track.markers;
@@ -756,7 +673,10 @@
         markers,
         artwork: track.artwork,
         album: track.album || "",
-        waveform: track.waveform
+        waveform: track.waveform,
+        duration: track.durationSeconds,
+        downloadUrl: track.downloadUrl,
+        downloadName: track.downloadName
       };
     }
     /**
@@ -767,8 +687,8 @@
      * on:timeupdate onto them), so a user-supplied callback is chained to run
      * AFTER the playlist's own handling instead of being overwritten by it.
      *
-     * @private
-     * @returns {Object} Callback options for the WaveformPlayer.
+     * @internal
+     * @returns Callback options for the WaveformPlayer.
      */
     playerCallbacks() {
       const user = this.options;
@@ -810,7 +730,7 @@
     }
     /**
      * Update play/pause state on artwork
-     * @private
+     * @internal
      */
     updatePlayState() {
       if (this.isHero || this.isGrid) {
@@ -847,8 +767,8 @@
     }
     /**
      * Update active chapter based on playback position
-     * @private
-     * @param {number} currentTime - Current playback time in seconds
+     * @internal
+     * @param currentTime - Current playback time in seconds
      */
     updateActiveChapter(currentTime) {
       const track = this.tracks[this.currentTrackIndex];
@@ -880,8 +800,8 @@
      * Warn (once per track) about chapters that start beyond the track's end —
      * a typo'd `data-time` that can never become active. Only checkable once
      * the real duration is known, hence the time-update hook.
-     * @private
-     * @param {number} duration - Track duration in seconds.
+     * @internal
+     * @param duration - Track duration in seconds.
      */
     checkChapterRange(duration) {
       const index = this.currentTrackIndex;
@@ -897,9 +817,9 @@
     /**
      * Toggle a chapter row's active styling and its `aria-current` state so the
      * playing chapter is conveyed to assistive technology, not just visually.
-     * @private
-     * @param {HTMLElement} item - Chapter row element
-     * @param {boolean} isActive - Whether this chapter is the active one
+     * @internal
+     * @param item - Chapter row element
+     * @param isActive - Whether this chapter is the active one
      */
     setChapterActive(item, isActive) {
       item.classList.toggle("wp-active", isActive);
@@ -911,7 +831,7 @@
     }
     /**
      * Create chapter list UI for single track with chapters
-     * @private
+     * @internal
      */
     createChapterList() {
       const track = this.tracks[0];
@@ -945,10 +865,10 @@
      * track list and the hero queue). Returns null when the track has no
      * chapters or `expandChapters` is off. Hidden by default; shown for the
      * active track by setActiveTrack/selectTrack.
-     * @private
-     * @param {Object} track
-     * @param {number} index
-     * @returns {HTMLElement|null}
+     * @internal
+     * @param track
+     * @param index
+     * @returns 
      */
     buildChapterSublist(track, index) {
       if (!(track.chapters.length > 0 && this.options.expandChapters)) return null;
@@ -980,7 +900,7 @@
     }
     /**
      * Create track list UI for multiple tracks
-     * @private
+     * @internal
      */
     createTrackList() {
       const listContainer = document.createElement("div");
@@ -1056,7 +976,7 @@
     }
     /**
      * Create minimal control buttons UI
-     * @private
+     * @internal
      */
     createMinimalControls() {
       const controls = document.createElement("div");
@@ -1076,7 +996,7 @@
     /**
      * Select and load a track
      * @public
-     * @param {number} index - Track index to select
+     * @param index - Track index to select
      */
     selectTrack(index) {
       this.loadTrackAt(index, null);
@@ -1089,9 +1009,9 @@
      * report a load synchronously (preload="none" with inline peaks skips
      * every await), so registering afterwards could miss it.
      *
-     * @private
-     * @param {number} index - Track index to select
-     * @param {Function|null} onLoaded - Run after the track's onLoad
+     * @internal
+     * @param index - Track index to select
+     * @param onLoaded - Run after the track's onLoad
      */
     loadTrackAt(index, onLoaded) {
       if (index < 0 || index >= this.tracks.length) return;
@@ -1110,7 +1030,7 @@
     }
     /**
      * Remove the active styling / `aria-current` from every chapter row.
-     * @private
+     * @internal
      */
     clearChapterHighlights() {
       if (!this.listElement) return;
@@ -1119,10 +1039,14 @@
       });
     }
     /**
-     * Seek to a specific chapter within a track
+     * Seek to a chapter within a track. If the chapter lives on a different
+     * track, the track is loaded first and the seek runs once that track has
+     * loaded; it is dropped if the load fails or another track is selected
+     * first. When the duration isn't known yet (e.g. `preload: 'none'`),
+     * playback starts and the seek lands when the metadata arrives.
      * @public
-     * @param {number} trackIndex - Track index
-     * @param {number} time - Time in seconds to seek to
+     * @param trackIndex - Track index
+     * @param time - Time in seconds to seek to
      */
     seekToChapter(trackIndex, time) {
       if (!this.player) return;
@@ -1141,8 +1065,8 @@
      * started — which fetches the metadata — and the seek runs on
      * `loadedmetadata` (cancelled like any other pending action).
      *
-     * @private
-     * @param {number} time - Time in seconds
+     * @internal
+     * @param time - Time in seconds
      */
     seekAndPlay(time) {
       const player = this.player;
@@ -1171,8 +1095,8 @@
     /**
      * Resolve the pending post-load action, if the load that just finished is
      * the one it was waiting for. Wired to the player's `onLoad`.
-     * @private
-     * @param {Object} [player] - The player that loaded.
+     * @internal
+     * @param player - The player that loaded.
      */
     resolvePending(player) {
       const pending = this.pending;
@@ -1185,7 +1109,7 @@
     /**
      * Drop the pending post-load action (there is only ever one). Called when
      * another track is selected, when a load fails, and on destroy().
-     * @private
+     * @internal
      */
     cancelPending() {
       const pending = this.pending;
@@ -1194,8 +1118,8 @@
     }
     /**
      * Update active track UI state
-     * @private
-     * @param {number} index - Track index to mark as active
+     * @internal
+     * @param index - Track index to mark as active
      */
     setActiveTrack(index) {
       if (this.isMinimal) {
@@ -1233,7 +1157,7 @@
     }
     /**
      * Handle track end event
-     * @private
+     * @internal
      */
     onTrackEnd() {
       this.currentChapterIndex = -1;
@@ -1262,7 +1186,7 @@
     }
     /**
      * Bind keyboard shortcuts for navigation
-     * @private
+     * @internal
      */
     bindKeyboard() {
       this.keydownHandler = (e) => {
@@ -1307,9 +1231,9 @@
      * Without this, the clickable track and chapter rows are mouse-only and
      * invisible to keyboard and screen-reader users.
      *
-     * @private
-     * @param {HTMLElement} el - Element to make activatable
-     * @param {Function} onActivate - Handler run on click / Enter / Space; receives the originating event
+     * @internal
+     * @param el - Element to make activatable
+     * @param onActivate - Handler run on click / Enter / Space; receives the originating event
      */
     makeActivatable(el, onActivate) {
       el.setAttribute("role", "button");
@@ -1334,9 +1258,9 @@
      * Hour-long chapters need `H:MM:SS`, which used to read as just the hour
      * (`"1:05:30"` → 1 second).
      *
-     * @private
-     * @param {string} timeStr - Time string: "SS", "M:SS" or "H:MM:SS"
-     * @returns {number} Time in seconds, or 0 when unparseable
+     * @internal
+     * @param timeStr - Time string: "SS", "M:SS" or "H:MM:SS"
+     * @returns Time in seconds, or 0 when unparseable
      */
     parseTime(timeStr) {
       const parts = String(timeStr ?? "").trim().split(":");
@@ -1346,9 +1270,9 @@
     }
     /**
      * Format seconds to time string
-     * @private
-     * @param {number} seconds - Time in seconds
-     * @returns {string} Formatted time string "M:SS"
+     * @internal
+     * @param seconds - Time in seconds
+     * @returns Formatted time string "M:SS"
      */
     formatTime(seconds) {
       const mins = Math.floor(seconds / 60);
@@ -1357,9 +1281,9 @@
     }
     /**
      * Extract title from URL filename
-     * @private
-     * @param {string} url - Audio file URL
-     * @returns {string} Extracted title
+     * @internal
+     * @param url - Audio file URL
+     * @returns Extracted title
      */
     extractTitleFromUrl(url) {
       if (!url) return "Untitled";
@@ -1369,16 +1293,16 @@
     }
     /**
      * Generate unique ID
-     * @private
-     * @returns {string} Random ID string
+     * @internal
+     * @returns Random ID string
      */
     generateId() {
       return Math.random().toString(36).substring(2, 9);
     }
     /**
-     * Get current player instance
+     * Get the underlying WaveformPlayer instance, or `null`.
      * @public
-     * @returns {WaveformPlayer|null} The WaveformPlayer instance
+     * @returns The WaveformPlayer instance
      */
     getPlayer() {
       return this.player;
@@ -1386,7 +1310,7 @@
     /**
      * Get current track index
      * @public
-     * @returns {number} Current track index
+     * @returns Current track index
      */
     getCurrentTrackIndex() {
       return this.currentTrackIndex;
@@ -1394,13 +1318,15 @@
     /**
      * Get all tracks
      * @public
-     * @returns {Array} Array of track objects
+     * @returns Array of track objects
      */
     getTracks() {
       return this.tracks;
     }
     /**
-     * Destroy the playlist instance and cleanup
+     * Destroy the playlist: remove its listeners and generated DOM, restore the
+     * original `[data-track]` markup in place, and drop the classes and
+     * auto-init flag it added, so the container can be initialised again.
      * @public
      */
     destroy() {
@@ -1470,7 +1396,6 @@
  * WaveformPlaylist
  * Playlist and chapter navigation for WaveformPlayer
  *
- * @version 1.0.0
  * @author ArrayPress
  * @license MIT
  */

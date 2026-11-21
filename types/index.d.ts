@@ -2,7 +2,6 @@
  * WaveformPlaylist
  * Playlist and chapter navigation for WaveformPlayer
  *
- * @version 1.0.0
  * @author ArrayPress
  * @license MIT
  */
@@ -58,8 +57,9 @@ export declare class WaveformPlaylist {
      * @param {string} [options.barPosition='bottom'] - Grid now-playing bar position: 'top' or 'bottom'
      *
      * Any other option is forwarded to the embedded WaveformPlayer, including
-     * its callbacks (chained after the playlist's own). `audioMode` is ignored:
-     * the playlist always owns its audio.
+     * its callbacks (chained after the playlist's own). `audioMode`, `loop`,
+     * `showLoop` and `lazy` are never forwarded (see NOT_FORWARDED): the
+     * playlist owns its audio, and a looping player never ends a track.
      * @throws {Error} If container not found or WaveformPlayer not available
      */
     constructor(container: string | HTMLElement, options?: WaveformPlaylistOptions);
@@ -117,3 +117,4 @@ export declare class WaveformPlaylist {
     destroy(): void;
 }
 export default WaveformPlaylist;
+//# sourceMappingURL=index.d.ts.map
