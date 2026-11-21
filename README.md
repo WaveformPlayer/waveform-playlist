@@ -7,7 +7,7 @@ Turn a list of tracks into a player with track switching, artwork and clickable 
 
 [![npm version](https://img.shields.io/npm/v/@arraypress/waveform-playlist?style=flat-square&labelColor=09090b&color=3f3f46)](https://www.npmjs.com/package/@arraypress/waveform-playlist)
 [![gzip size](https://img.shields.io/bundlephobia/minzip/@arraypress/waveform-playlist?style=flat-square&label=gzip&labelColor=09090b&color=3f3f46)](https://bundlephobia.com/package/@arraypress/waveform-playlist)
-[![license](https://img.shields.io/npm/l/@arraypress/waveform-playlist?style=flat-square&labelColor=09090b&color=3f3f46)](https://github.com/arraypress/waveform-playlist/blob/main/LICENSE)
+[![license](https://img.shields.io/npm/l/@arraypress/waveform-playlist?style=flat-square&labelColor=09090b&color=3f3f46)](https://github.com/WaveformPlayer/waveform-playlist/blob/main/LICENSE)
 
 **[Documentation](https://docs.waveformplayer.com/)** · [npm](https://www.npmjs.com/package/@arraypress/waveform-playlist)
 

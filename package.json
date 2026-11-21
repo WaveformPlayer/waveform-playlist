@@ -51,12 +51,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/arraypress/waveform-playlist.git"
+    "url": "git+https://github.com/WaveformPlayer/waveform-playlist.git"
   },
   "bugs": {
-    "url": "https://github.com/arraypress/waveform-playlist/issues"
+    "url": "https://github.com/WaveformPlayer/waveform-playlist/issues"
   },
-  "homepage": "https://github.com/arraypress/waveform-playlist#readme",
+  "homepage": "https://github.com/WaveformPlayer/waveform-playlist#readme",
   "peerDependencies": {
     "@arraypress/waveform-player": "^1.24.5"
   },
