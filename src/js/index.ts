@@ -1531,7 +1531,11 @@ export class WaveformPlaylist {
     }
 
     /**
-     * Seek to a specific chapter within a track
+     * Seek to a chapter within a track. If the chapter lives on a different
+     * track, the track is loaded first and the seek runs once that track has
+     * loaded; it is dropped if the load fails or another track is selected
+     * first. When the duration isn't known yet (e.g. `preload: 'none'`),
+     * playback starts and the seek lands when the metadata arrives.
      * @public
      * @param trackIndex - Track index
      * @param time - Time in seconds to seek to
@@ -1860,7 +1864,7 @@ export class WaveformPlaylist {
     }
 
     /**
-     * Get current player instance
+     * Get the underlying WaveformPlayer instance, or `null`.
      * @public
      * @returns The WaveformPlayer instance
      */
@@ -1887,7 +1891,9 @@ export class WaveformPlaylist {
     }
 
     /**
-     * Destroy the playlist instance and cleanup
+     * Destroy the playlist: remove its listeners and generated DOM, restore the
+     * original `[data-track]` markup in place, and drop the classes and
+     * auto-init flag it added, so the container can be initialised again.
      * @public
      */
     destroy() {
