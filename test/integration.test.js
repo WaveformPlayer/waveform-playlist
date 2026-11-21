@@ -196,30 +196,17 @@ describe('real core: preload="none" chapter seek (finding 11)', () => {
 	});
 });
 
-describe('legacy fallback parser matches the core (finding 16)', () => {
-	const fallback = (el) => WaveformPlaylist.prototype.parsePlayerDataAttributesFallback.call(null, el);
-	// Per-track content and options the playlist strips/owns — the fallback
-	// deliberately doesn't read them.
-	const NOT_FORWARDED = ['url', 'src', 'title', 'artist', 'album', 'artwork', 'waveform', 'markers', 'audioMode', 'layout'];
+// 2.0: this block used to check the playlist's own fallback parser (kept for
+// cores without utils.parseDataAttributes) against the core's — that every
+// key the core reads, it read too, with the same coercions and aliases. The
+// fallback is gone and the core's parser is the only path, so the same inputs
+// now check that what the core parses is what the playlist forwards.
+describe('container data-* goes through the core\'s parser (finding 16)', () => {
+	// Per-track content and options the playlist strips/owns.
+	const NOT_FORWARDED = ['url', 'title', 'artist', 'album', 'artwork', 'waveform', 'markers', 'audioMode', 'layout'];
 
-	/** Every dataset key a parser reads, via a recording proxy. */
-	function keysRead(parse) {
-		const read = new Set();
-		const dataset = new Proxy({}, { get(_, key) { if (typeof key === 'string') read.add(key); return undefined; } });
-		parse({ dataset });
-		return read;
-	}
-
-	it('reads every data-* key the core reads', () => {
-		const core = keysRead(WaveformPlayer.utils.parseDataAttributes);
-		const ours = keysRead(fallback);
-		const missing = [...core].filter((k) => !ours.has(k) && !NOT_FORWARDED.includes(k));
-		expect(missing).toEqual([]);
-	});
-
-	it('produces the same options as the core', () => {
-		const el = document.createElement('div');
-		Object.assign(el.dataset, {
+	it('forwards every option the core parses off the container', () => {
+		const dataset = {
 			height: '120', samples: '200', preload: 'metadata', crossOrigin: 'anonymous',
 			style: 'bars', waveformStyle: 'mirror', waveformGradient: 'vertical',
 			barWidth: '3', barSpacing: '1', barRadius: '2', buttonAlign: 'right',
@@ -233,21 +220,34 @@ describe('legacy fallback parser matches the core (finding 16)', () => {
 			seekLabel: 'Scrub', seekValueText: '{current} of {total}', errorText: 'Oops',
 			playPauseLabel: 'Toggle', speedLabel: 'Rate', artworkAlt: 'Cover',
 			unknownTrackText: 'Untitled', playIcon: '<svg></svg>', pauseIcon: '<svg></svg>',
-		});
-		const core = WaveformPlayer.utils.parseDataAttributes(el);
+		};
+		const probe = document.createElement('div');
+		Object.assign(probe.dataset, dataset);
+		const core = WaveformPlayer.utils.parseDataAttributes(probe);
 		NOT_FORWARDED.forEach((k) => delete core[k]);
-		const ours = fallback(el);
-		// The fallback also reads colour attributes that only older cores
-		// understood; compare on the core's keys.
-		const shared = Object.fromEntries(Object.keys(core).map((k) => [k, ours[k]]));
-		expect(shared).toEqual(core);
+		expect(Object.keys(core).length).toBeGreaterThan(30);
+
+		const { playlist } = mount(THREE_TRACKS, {}, dataset);
+		expect(playlist.options).toMatchObject(core);
 	});
 
-	it('applies the legacy aliases like the core', () => {
-		const el = document.createElement('div');
-		Object.assign(el.dataset, { style: 'bars', color: '#123456', theme: 'light' });
-		const core = WaveformPlayer.utils.parseDataAttributes(el);
-		expect(fallback(el)).toMatchObject(core);
+	it('no longer reads the data-color / data-theme aliases 2.0 removed', () => {
+		const { playlist } = mount(THREE_TRACKS, {}, { color: '#123456', theme: 'light' });
+		expect(playlist.options.waveformColor).toBeUndefined();
+		expect(playlist.options.colorPreset).toBeUndefined();
+		expect(playlist.player.options.waveformColor).not.toBe('#123456');
+	});
+});
+
+describe('real core: a malformed container attribute', () => {
+	// Moved from playlist.test.js in 2.0: the playlist no longer coerces
+	// data-* itself, so a NaN height is the core's to reject.
+	it('falls back to the default height instead of a NaN canvas', () => {
+		console.warn.mockClear();
+		const { playlist } = mount(THREE_TRACKS, {}, { height: 'tall' });
+		expect(Number.isFinite(playlist.player.options.height)).toBe(true);
+		expect(playlist.player.options.height).toBeGreaterThan(0);
+		expect(console.warn).toHaveBeenCalled();
 	});
 });
 

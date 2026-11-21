@@ -23,6 +23,12 @@
 //
 // Installed on `window` BEFORE the source module is imported so the playlist's
 // auto-init dependency check passes and no readiness-polling interval is armed.
+//
+// The one piece that is NOT a stand-in: `utils`, the real core's helpers. The
+// playlist reads the container's player options with the core's own
+// `utils.parseDataAttributes`, and a hand-written copy here would just be the
+// drift the playlist removed in 2.0 (it used to keep a parser of its own).
+import { WaveformPlayer as RealWaveformPlayer } from '@arraypress/waveform-player/no-autoinit';
 
 /** The core's `mergeOptions`: later sources win, nullish values are skipped. */
 function mergeOptions(...sources) {
@@ -177,5 +183,9 @@ MockWaveformPlayer.failingUrls = new Set();
 MockWaveformPlayer.durations = {};
 /** Per-URL extra load latency in ms (a slow origin). */
 MockWaveformPlayer.loadDelays = {};
+
+/** The real core's utils (parseDataAttributes, …). Tests may swap it; restore with this. */
+export const realUtils = RealWaveformPlayer.utils;
+MockWaveformPlayer.utils = realUtils;
 
 window.WaveformPlayer = MockWaveformPlayer;

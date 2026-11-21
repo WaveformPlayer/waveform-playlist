@@ -77,6 +77,24 @@ const PLAYLIST_OWN_OPTIONS = [
 ];
 
 /**
+ * Player options the playlist never passes to its embedded player, whether
+ * they come from the constructor or the container's `data-*`:
+ *
+ * - `audioMode` — the playlist always owns its audio. An `'external'` player
+ *   inside a playlist dispatches request-play events nobody answers, so the
+ *   playlist would never play.
+ * @internal
+ */
+const NOT_FORWARDED = ['audioMode'];
+
+/**
+ * Player options each `[data-track]` supplies for itself (see
+ * trackPlayerOptions()), so the container's `data-*` never sets them.
+ * @internal
+ */
+const PER_TRACK_OPTIONS = ['url', 'title', 'artist', 'album', 'artwork', 'markers', 'waveform'];
+
+/**
  * The play-state glyphs, inline: the playlist draws its own icons rather than
  * relying on an icon font the host page may not load (it used Tabler's `ti`
  * classes, so on a page without Tabler every play/pause icon was blank).
@@ -235,21 +253,19 @@ export class WaveformPlaylist {
         const ds = container.dataset;
         const options: Record<string, any> = {...providedOptions};
 
-        // The playlist always drives a self-mode player that owns its audio.
-        // The framework wrappers forward `audioMode` from their props, and an
-        // `'external'` player inside a playlist dispatches request-play events
-        // nobody answers — a playlist that never plays. Stripped from BOTH the
-        // constructor options (here) and the container's data-* (below).
-        delete options.audioMode;
+        // Player options the playlist never forwards (see NOT_FORWARDED) are
+        // stripped from BOTH the constructor options (here) and the
+        // container's data-* (below): the framework wrappers pass every prop
+        // as a constructor option.
+        NOT_FORWARDED.forEach(key => delete options[key]);
 
-        // Inherit the player's full `data-*` option surface from the container.
-        // data-* values take precedence over constructor options (as before).
-        const fromData = this.parsePlayerDataAttributes(container);
-        // Strip keys the playlist owns or sets per-track, so a container-level
-        // data-* can never override them: audioMode and the per-track content
-        // fields.
-        ['audioMode', 'url', 'title', 'artist', 'album', 'artwork', 'markers', 'waveform']
-            .forEach(key => delete fromData[key]);
+        // Inherit the player's full `data-*` option surface from the container,
+        // parsed by the core itself so the playlist never drifts from it.
+        // data-* values take precedence over constructor options.
+        const fromData: Record<string, any> = {...window.WaveformPlayer.utils.parseDataAttributes(container)};
+        // Strip what the playlist never forwards and what each [data-track]
+        // supplies, so a container-level data-* can never override them.
+        [...NOT_FORWARDED, ...PER_TRACK_OPTIONS].forEach(key => delete fromData[key]);
         Object.assign(options, fromData);
 
         // Playlist-specific options resolve as data-* > constructor option >
@@ -286,118 +302,6 @@ export class WaveformPlaylist {
         options.chapterMarkerColor = ds.chapterMarkerColor || options.chapterMarkerColor || 'rgba(161, 161, 170, 0.85)';
 
         return options;
-    }
-
-    /**
-     * Read the player's `data-*` option surface off the container.
-     *
-     * Prefers the core's own parser (`WaveformPlayer.utils.parseDataAttributes`)
-     * so the playlist inherits the complete, current contract and never drifts
-     * as the player gains options. Falls back to a local parser only for cores
-     * older than the one that exposes the bridge helper.
-     *
-     * @internal
-     * @param container - The playlist container element
-     * @returns Sparse player options parsed from the container's data-*
-     */
-    parsePlayerDataAttributes(container: HTMLElement): Record<string, any> {
-        const utils = typeof window !== 'undefined'
-            && window.WaveformPlayer && window.WaveformPlayer.utils;
-        if (utils && typeof utils.parseDataAttributes === 'function') {
-            // Single source of truth — let the core parse its own contract.
-            return {...utils.parseDataAttributes(container)};
-        }
-        return this.parsePlayerDataAttributesFallback(container);
-    }
-
-    /**
-     * Container-level `data-*` parser used only with cores that predate
-     * `WaveformPlayer.utils.parseDataAttributes`. Mirrors the player's
-     * container-relevant options with correct dataset keys and per-key coercion.
-     *
-     * Note: the dataset key for `data-show-bpm` is `showBpm`, which maps to the
-     * `showBPM` option. Reading `dataset.showBPM` would target the wrong
-     * attribute (`data-show-b-p-m`) and silently drop the flag.
-     *
-     * @internal
-     * @param container - The playlist container element
-     * @returns Sparse player options parsed from the container's data-*
-     */
-    parsePlayerDataAttributesFallback(container: HTMLElement): Record<string, any> {
-        const ds = container.dataset;
-        const opts: Record<string, any> = {};
-        // Semantics match the core's parseDataAttributes (test/integration.test.js
-        // checks parity against the real one): an empty string attribute is
-        // absent, and a present boolean attribute is true only when "true".
-        const str = (k: string, o: string = k) => { if (ds[k]) opts[o] = ds[k]; };
-        const bool = (k: string, o: string = k) => { if (ds[k] !== undefined) opts[o] = ds[k] === 'true'; };
-        // A gradient-capable colour may be a JSON array of stops.
-        const color = (k: string, o: string = k) => {
-            if (!ds[k]) return;
-            let value: any = ds[k];
-            if (value.trim().startsWith('[')) {
-                try { value = JSON.parse(value); } catch (e) { /* keep the raw string, as the core does */ }
-            }
-            opts[o] = value;
-        };
-        // A CSS length: a bare number is px, a unit string is kept verbatim.
-        const length = (k: string, o: string = k) => {
-            if (!ds[k]) return;
-            opts[o] = /^\d+(\.\d+)?$/.test(ds[k]!.trim()) ? parseFloat(ds[k]!) : ds[k];
-        };
-        // Numeric attributes are only forwarded when they actually parsed — a
-        // NaN reaching the player sizes its canvas to nothing, which reads as a
-        // broken player rather than a bad attribute.
-        const num = (k: string, o: string, parse: (v: string) => number) => {
-            if (!ds[k]) return;
-            const n = parse(ds[k]!);
-            if (Number.isFinite(n)) opts[o] = n;
-            else console.warn(`[WaveformPlaylist] Invalid ${k} attribute, expected a number:`, ds[k]);
-        };
-        const int = (k: string, o: string = k) => num(k, o, (v) => parseInt(v, 10));
-        const float = (k: string, o: string = k) => num(k, o, parseFloat);
-        // JSON.parse validates syntax, not shape: '2' and '{"a":1}' parse
-        // cleanly and then throw at the first .map() downstream. Require the
-        // array the option is documented to be.
-        const jsonArray = (k: string, o: string = k) => {
-            if (!ds[k]) return;
-            let parsed: any;
-            try { parsed = JSON.parse(ds[k]!); }
-            catch (e) {
-                console.warn(`[WaveformPlaylist] Invalid ${k} JSON:`, e);
-                return;
-            }
-            if (Array.isArray(parsed)) opts[o] = parsed;
-            else console.warn(`[WaveformPlaylist] Invalid ${k} attribute, expected a JSON array:`, ds[k]);
-        };
-
-        // Layout / sizing. `data-style` is the shorthand alias; the canonical
-        // long form is read after it, so it wins when both are set.
-        str('style', 'waveformStyle'); str('waveformStyle'); str('waveformGradient');
-        int('barWidth'); int('barSpacing'); int('barRadius');
-        str('buttonAlign'); str('buttonStyle'); length('buttonSize'); length('buttonRadius');
-        int('height'); int('samples'); str('preload'); str('crossOrigin');
-        str('artworkPosition');
-        // Colours. The legacy `data-color` / `data-theme` aliases are read
-        // AFTER their canonical forms, matching the core (where they win).
-        str('colorPreset'); color('waveformColor'); color('progressColor');
-        str('color', 'waveformColor'); str('theme', 'colorPreset');
-        // Only older cores read these; harmless to forward to newer ones.
-        str('buttonColor'); str('buttonHoverColor'); str('textColor'); str('textSecondaryColor');
-        str('backgroundColor'); str('borderColor');
-        // Feature flags
-        bool('autoplay'); bool('showControls'); bool('showInfo'); bool('showTime');
-        bool('showHoverTime'); bool('seekHandle'); bool('showBpm', 'showBPM'); int('bpm');
-        bool('singlePlay'); bool('playOnSeek');
-        bool('showPlaybackSpeed'); bool('enableMediaSession'); bool('showMarkers'); bool('accessibleSeek');
-        // Playback
-        float('playbackRate'); jsonArray('playbackRates');
-        // Accessibility / labels / icons
-        str('seekLabel'); str('seekValueText'); str('errorText');
-        str('playPauseLabel'); str('speedLabel'); str('artworkAlt'); str('unknownTrackText');
-        str('playIcon'); str('pauseIcon');
-
-        return opts;
     }
 
     /**

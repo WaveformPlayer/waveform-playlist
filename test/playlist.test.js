@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { MockWaveformPlayer, settle } from './setup.js';
+import { MockWaveformPlayer, realUtils, settle } from './setup.js';
 import { WaveformPlaylist } from '../src/js/index.js';
 
 /**
@@ -45,9 +45,8 @@ afterEach(() => {
 	// cross-test leakage between playlist instances.
 	created.splice(0).forEach((pl) => { try { pl.destroy(); } catch {} });
 	document.body.innerHTML = '';
-	// Some tests attach a utils bridge to the mock core; reset it so others
-	// exercise the local fallback parser.
-	delete MockWaveformPlayer.utils;
+	// Some tests swap the core's utils for a spy; put the real ones back.
+	MockWaveformPlayer.utils = realUtils;
 });
 
 /** Build a container with data-* attributes and tracks, and construct a playlist. */
@@ -289,8 +288,11 @@ describe('continuous mode', () => {
 });
 
 describe('container data-* coverage', () => {
-	it('forwards the full player data-* surface via the local fallback parser', () => {
-		// The mock core exposes no utils bridge, so the fallback parser runs.
+	// 2.0: these two ran against the playlist's own fallback parser (the mock
+	// had no utils bridge). That parser is gone — the core's
+	// parseDataAttributes is the only path — so they now check the same
+	// coercions arrive through it.
+	it('forwards the full player data-* surface via the core\'s parseDataAttributes', () => {
 		const { playlist } = mountWithData({
 			barRadius: '4',
 			buttonAlign: 'right',
@@ -313,7 +315,7 @@ describe('container data-* coverage', () => {
 		expect(playlist.player.options.showBPM).toBe(true);
 	});
 
-	it('delegates to WaveformPlayer.utils.parseDataAttributes when present, stripping owned keys', () => {
+	it('reads the container with WaveformPlayer.utils.parseDataAttributes, stripping owned keys', () => {
 		const spy = vi.fn(() => ({
 			height: 222,
 			waveformStyle: 'seekbar',
@@ -397,15 +399,19 @@ describe('malformed markup does not take the playlist down', () => {
 		expect(playlist.tracks[0].markers).toEqual([{ time: 30, label: 'Drop' }]);
 	});
 
-	it('does not forward a non-numeric data-height to the player', () => {
-		const { playlist } = mountWithData({ height: 'tall' }, TWO_TRACKS);
-		expect(playlist.player.options.height).toBeUndefined();
-		expect(warn).toHaveBeenCalled();
-	});
+	// 2.0: a non-numeric data-height used to be dropped by the playlist's own
+	// parser. The core's parseDataAttributes only shapes values and its
+	// constructor's normalizeOptions() rejects a NaN height (default + warning),
+	// which this mock doesn't model — so that check lives in
+	// integration.test.js, against the real core.
 
-	it('does not forward playbackRates that are not a JSON array', () => {
-		const { playlist } = mountWithData({ playbackRates: '2' }, TWO_TRACKS);
+	it('does not forward playbackRates that are not a list', () => {
+		// 2.0: was '2', which the 1.x fallback rejected as "not a JSON array".
+		// The core reads bare lists ('0.5, 1, 2'), so '2' is a valid one-rate
+		// list now; an object is still not a list.
+		const { playlist } = mountWithData({ playbackRates: '{"a":1}' }, TWO_TRACKS);
 		expect(playlist.player.options.playbackRates).toBeUndefined();
+		expect(warn).toHaveBeenCalled();
 	});
 
 	it('still forwards valid numeric and list attributes', () => {
