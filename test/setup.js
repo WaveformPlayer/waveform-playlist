@@ -159,7 +159,11 @@ export class MockWaveformPlayer {
 			this.options.artwork = options.artwork || null;
 		}
 		if (options.preload) this.audio.preload = options.preload;
-		// The core clears per-track markers/peaks rather than inheriting them.
+		// The core clears per-track markers/peaks rather than inheriting them,
+		// and resets these to its defaults unless the call supplies them.
+		for (const key of ['bpm', 'album', 'duration', 'downloadUrl', 'downloadName']) {
+			if (options[key] == null) delete this.options[key];
+		}
 		this.options.markers = options.markers || [];
 		this.options.waveform = options.waveform || null;
 

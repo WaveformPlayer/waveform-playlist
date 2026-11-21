@@ -101,7 +101,10 @@ const NOT_FORWARDED = ['audioMode', 'loop', 'showLoop', 'lazy'];
  * trackPlayerOptions()), so the container's `data-*` never sets them.
  * @internal
  */
-const PER_TRACK_OPTIONS = ['url', 'title', 'artist', 'album', 'artwork', 'markers', 'waveform'];
+const PER_TRACK_OPTIONS = [
+    'url', 'title', 'artist', 'album', 'artwork', 'markers', 'waveform',
+    'duration', 'downloadUrl', 'downloadName'
+];
 
 /**
  * The play-state glyphs, inline: the playlist draws its own icons rather than
@@ -357,8 +360,9 @@ export class WaveformPlaylist {
      *
      * A JSON array is parsed here so a typo costs that one track its peaks
      * (the player then decodes the audio) rather than reaching the player as
-     * a string; anything else — a `.json` peaks URL, or a comma-separated
-     * list — is passed through for the core to resolve, which it already does.
+     * a string; anything else — a `.json` peaks URL, a comma-separated list
+     * or compact `wp1:` peaks — is passed through for the core to resolve
+     * (a malformed `wp1:` string is unusable peaks there, never an error).
      *
      * @internal
      * @param raw - Raw `data-waveform` value.
@@ -376,6 +380,31 @@ export class WaveformPlaylist {
 
         console.warn('[WaveformPlaylist] Invalid waveform attribute, expected a JSON array of peaks or a peaks URL:', raw);
         return undefined;
+    }
+
+    /**
+     * Parse a track's `data-duration`: `"3:45"`, `"1:02:03"` or a bare count
+     * of seconds (`"225"`, the core's own `data-duration` form).
+     *
+     * The text is what the list and the hero readout show — a bare count is
+     * formatted (`"3:45"`), anything else is shown as written, as in 1.x. The
+     * seconds go to the player as its `duration` option, so the time readout,
+     * markers and seeks have a length before the audio's metadata arrives.
+     *
+     * @internal
+     * @param raw - Raw `data-duration` value.
+     * @returns The display text and the length in seconds (each undefined
+     *   when there is none).
+     */
+    parseDuration(raw: string | undefined): { text: string | undefined; seconds: number | undefined } {
+        const value = (raw || '').trim();
+        if (!value) return { text: undefined, seconds: undefined };
+        const seconds = this.parseTime(value);
+        const bare = /^\d+(\.\d+)?$/.test(value);
+        return {
+            text: bare ? this.formatTime(seconds) : value,
+            seconds: seconds > 0 ? seconds : undefined,
+        };
     }
 
     /**
@@ -403,6 +432,8 @@ export class WaveformPlaylist {
                 };
             }).sort((a, b) => a.time - b.time);
 
+            const duration = this.parseDuration(el.dataset.duration);
+
             return {
                 element: el,
                 index: index,
@@ -411,7 +442,10 @@ export class WaveformPlaylist {
                 artist: el.dataset.artist || '',
                 artwork: el.dataset.artwork,
                 album: el.dataset.album,
-                duration: el.dataset.duration,
+                duration: duration.text,
+                durationSeconds: duration.seconds,
+                downloadUrl: el.dataset.downloadUrl || undefined,
+                downloadName: el.dataset.downloadName || undefined,
                 waveform: this.parseWaveform(el.dataset.waveform),
                 chapters: chapters,
                 // Parse explicit markers if provided (separate from chapters)
@@ -957,14 +991,24 @@ export class WaveformPlaylist {
      * Every key is always present, because the core merges loadTrack() options
      * over the previous track's and skips `undefined`: an absent album used to
      * leave the previous track's album on the lock screen / Media Session.
-     * The core itself resets `artwork` (removed when falsy), `markers` and
-     * `waveform` (falsy = decode from the audio) per load.
+     * The core itself resets `artwork` (removed when falsy), `markers`,
+     * `waveform` (falsy = decode from the audio), `duration`, `downloadUrl`
+     * and `downloadName` (absent = the core's default: the audio's own length,
+     * the track url and its file name) per load.
      *
      * @internal
      * @param track - Parsed track.
      * @returns 
      */
-    trackPlayerOptions(track: WaveformPlaylistTrack): { markers: WaveformPlaylistMarker[]; artwork: string | undefined; album: string; waveform: string | number[] | undefined } {
+    trackPlayerOptions(track: WaveformPlaylistTrack): {
+        markers: WaveformPlaylistMarker[];
+        artwork: string | undefined;
+        album: string;
+        waveform: string | number[] | undefined;
+        duration: number | undefined;
+        downloadUrl: string | undefined;
+        downloadName: string | undefined;
+    } {
         let markers = track.markers;
 
         // Convert chapters to markers if needed (explicit markers win).
@@ -980,7 +1024,10 @@ export class WaveformPlaylist {
             markers: markers,
             artwork: track.artwork,
             album: track.album || '',
-            waveform: track.waveform
+            waveform: track.waveform,
+            duration: track.durationSeconds,
+            downloadUrl: track.downloadUrl,
+            downloadName: track.downloadName
         };
     }
 

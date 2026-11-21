@@ -46,11 +46,26 @@ export interface WaveformPlaylistTrack {
     artwork?: string;
     /** Album name. */
     album?: string;
-    /** Human-readable duration (e.g. "3:45"). */
+    /**
+     * Display duration from `data-duration`, shown in the list and the hero
+     * readout: as written (`"3:45"`), or formatted when the attribute is a bare
+     * count of seconds (`"225"` → `"3:45"`).
+     */
     duration?: string;
     /**
+     * The same `data-duration` in seconds, passed to the player as its
+     * `duration` option so the track has a length before its audio's metadata
+     * loads (with `preload: 'none'`, until playback starts).
+     */
+    durationSeconds?: number;
+    /** Download link target (`data-download-url`); the player defaults to the track url. */
+    downloadUrl?: string;
+    /** Suggested download file name (`data-download-name`); the player defaults to the url's file name. */
+    downloadName?: string;
+    /**
      * Pre-computed peaks from `data-waveform`: a parsed JSON array, or a
-     * source string (e.g. a `.json` peaks URL) the player resolves itself.
+     * source string the player resolves itself — a `.json` peaks URL, a
+     * comma-separated list, or compact `wp1:` peaks.
      */
     waveform?: number[] | string;
     /** Chapters belonging to this track. */

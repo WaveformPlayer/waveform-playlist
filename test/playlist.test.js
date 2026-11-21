@@ -672,6 +672,115 @@ describe('per-track data-waveform peaks', () => {
 	});
 });
 
+describe('2.0 per-track options: duration, downloadUrl, downloadName, wp1: peaks', () => {
+	// realUtils is the real core's, so encode real compact peaks with it.
+	const WP1 = realUtils.encodeCompactPeaks([0, 0.5, 1]);
+	const TRACKS = `
+		<div data-track data-url="/a.mp3" data-title="A" data-duration="3:45"
+			data-download-url="/dl/a.flac" data-download-name="A (lossless).flac" data-waveform="${WP1}"></div>
+		<div data-track data-url="/b.mp3" data-title="B" data-duration="187"></div>
+		<div data-track data-url="/c.mp3" data-title="C" data-duration="1:02:03" data-download-url="/dl/c.wav"></div>
+		<div data-track data-url="/d.mp3" data-title="D" data-duration="soon"></div>
+	`;
+
+	it('reads data-duration as display text and seconds', () => {
+		const { playlist } = mount(TRACKS);
+		const t = playlist.tracks;
+		expect([t[0].duration, t[0].durationSeconds]).toEqual(['3:45', 225]);
+		// A bare count of seconds (the core's data-duration form) is formatted for display.
+		expect([t[1].duration, t[1].durationSeconds]).toEqual(['3:07', 187]);
+		expect([t[2].duration, t[2].durationSeconds]).toEqual(['1:02:03', 3723]);
+		// Unparseable: shown as written (as in 1.x), no length for the player.
+		expect([t[3].duration, t[3].durationSeconds]).toEqual(['soon', undefined]);
+	});
+
+	it('hands the first track\'s values to the player on construction', () => {
+		const { playlist } = mount(TRACKS);
+		const o = playlist.player.options;
+		expect(o.duration).toBe(225);
+		expect(o.downloadUrl).toBe('/dl/a.flac');
+		expect(o.downloadName).toBe('A (lossless).flac');
+	});
+
+	it('hands each later track\'s values to loadTrack(), never the previous track\'s', () => {
+		const { playlist } = mount(TRACKS);
+		playlist.selectTrack(1);
+		expect(playlist.player.calls.loadTrack[0].options).toMatchObject({
+			duration: 187, downloadUrl: undefined, downloadName: undefined,
+		});
+		expect(playlist.player.options.duration).toBe(187);
+		expect(playlist.player.options.downloadUrl).toBeUndefined();
+		expect(playlist.player.options.downloadName).toBeUndefined();
+
+		playlist.selectTrack(2);
+		expect(playlist.player.options.duration).toBe(3723);
+		expect(playlist.player.options.downloadUrl).toBe('/dl/c.wav');
+
+		playlist.selectTrack(3);
+		expect(playlist.player.options.duration).toBeUndefined();
+		expect(playlist.player.options.downloadUrl).toBeUndefined();
+	});
+
+	it('passes compact wp1: peaks through untouched, without a warning', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const html = `
+			<div data-track data-url="/a.mp3" data-waveform="${WP1}"></div>
+			<div data-track data-url="/b.mp3" data-waveform="wp1:not-valid!"></div>
+		`;
+		const { playlist } = mount(html);
+		expect(playlist.tracks[0].waveform).toBe(WP1);
+		expect(playlist.player.options.waveform).toBe(WP1);
+		// A malformed wp1: string is the core's to reject (as unusable peaks), not ours.
+		playlist.selectTrack(1);
+		expect(playlist.player.calls.loadTrack[0].options.waveform).toBe('wp1:not-valid!');
+		expect(warn).not.toHaveBeenCalled();
+		warn.mockRestore();
+	});
+
+	it('never takes duration or download targets from the container', () => {
+		const { playlist } = mountWithData(
+			{ duration: '999', downloadUrl: '/dl/everything.zip', downloadName: 'all.zip' },
+			'<div data-track data-url="/a.mp3"></div><div data-track data-url="/b.mp3" data-duration="10"></div>',
+		);
+		// Not even kept in the playlist's options, where a later forward could pick them up.
+		expect(playlist.options).not.toHaveProperty('duration');
+		expect(playlist.options).not.toHaveProperty('downloadUrl');
+		expect(playlist.options).not.toHaveProperty('downloadName');
+		expect(playlist.player.options.duration).toBeUndefined();
+		expect(playlist.player.options.downloadUrl).toBeUndefined();
+		expect(playlist.player.options.downloadName).toBeUndefined();
+		playlist.selectTrack(1);
+		expect(playlist.player.options.duration).toBe(10);
+	});
+});
+
+describe('2.0 player-level options on the playlist root reach the player', () => {
+	const ROOT = {
+		showVolume: 'true', volume: '0.4', showDownload: 'true',
+		volumeLabel: 'Lautstärke', muteLabel: 'Stumm', downloadLabel: 'Herunterladen', loopLabel: 'Schleife',
+	};
+	const EXPECTED = {
+		showVolume: true, volume: 0.4, showDownload: true,
+		volumeLabel: 'Lautstärke', muteLabel: 'Stumm', downloadLabel: 'Herunterladen', loopLabel: 'Schleife',
+	};
+
+	it('from the container data-*', () => {
+		const { playlist } = mountWithData(ROOT);
+		expect(playlist.player.options).toMatchObject(EXPECTED);
+	});
+
+	it('from constructor options (what the framework wrappers pass)', () => {
+		const { playlist } = mount(TWO_TRACKS, EXPECTED);
+		expect(playlist.player.options).toMatchObject(EXPECTED);
+	});
+
+	it('and survive a track change', () => {
+		const { playlist } = mountWithData(ROOT);
+		playlist.selectTrack(1);
+		expect(playlist.player.options).toMatchObject(EXPECTED);
+	});
+});
+
 describe('track metadata does not leak between tracks', () => {
 	const ALBUMS = `
 		<div data-track data-url="/a.mp3" data-title="A" data-album="Album A" data-artwork="/art/a.jpg"></div>

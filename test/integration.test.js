@@ -156,6 +156,34 @@ describe('real core: loop, showLoop and lazy stay with the playlist (2.0)', () =
 	});
 });
 
+describe('real core: 2.0 per-track and root options', () => {
+	it('each track\'s duration and download target reach the player, wp1: peaks decode', async () => {
+		const wp1 = WaveformPlayer.utils.encodeCompactPeaks([0, 0.5, 1]);
+		const html = `
+			<div data-track data-url="/a.mp3" data-title="A" data-duration="3:45"
+				data-download-url="/dl/a.flac" data-download-name="A.flac" data-waveform="${wp1}"></div>
+			<div data-track data-url="/b.mp3" data-title="B" data-duration="187"></div>
+		`;
+		const { container, playlist } = mount(html, {}, { showDownload: 'true', showVolume: 'true', volume: '0.4' });
+		const player = playlist.player;
+		expect(player.options.duration).toBe(225);
+		expect(player.options.showVolume).toBe(true);
+		expect(player.options.volume).toBe(0.4);
+		expect(container.querySelector('.waveform-volume-slider')).not.toBeNull();
+		const link = container.querySelector('.waveform-download');
+		expect(link).not.toBeNull();
+		await vi.waitFor(() => expect(link.getAttribute('href')).toBe('/dl/a.flac'));
+		expect(link.getAttribute('download')).toBe('A.flac');
+		await vi.waitFor(() => expect(player.waveformData).toEqual(WaveformPlayer.utils.decodeCompactPeaks(wp1)));
+
+		playlist.selectTrack(1);
+		expect(player.options.duration).toBe(187);
+		// No per-track target: the core's defaults, the track url and its file name.
+		expect(player.options.downloadUrl ?? null).toBeNull();
+		await vi.waitFor(() => expect(link.getAttribute('href')).toBe('/b.mp3'));
+	});
+});
+
 describe('real core: destroy() and rebuild (finding 2)', () => {
 	it('keeps the track markup so the same container can be rebuilt', () => {
 		const { container, playlist } = mount(THREE_TRACKS, { layout: 'hero' });
