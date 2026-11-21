@@ -405,6 +405,14 @@ describe('never initialised twice', () => {
 		expect(el.dataset.waveformPlaylistInitialized).toBe('true');
 	});
 
+	it('the scan skips a container whose playlist was built in script', () => {
+		document.body.innerHTML = `<div data-waveform-playlist>${TRACKS}</div>`;
+		const built = new WaveformPlaylist(document.body.firstElementChild);
+		WaveformPlaylist.init();
+		expect(live()).toEqual([built.player]);
+		built.destroy();
+	});
+
 	it('the scan skips an element still waiting for DOMContentLoaded', () => {
 		const state = vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading');
 		document.body.innerHTML = `<waveform-playlist data-waveform-playlist>${TRACKS}</waveform-playlist>`;

@@ -30,6 +30,33 @@ npm install @arraypress/waveform-playlist @arraypress/waveform-player
 </div>
 ```
 
+## The `<waveform-playlist>` element
+
+The same markup, as a custom element. Its attributes are the playlist's
+`data-*` options with or without the `data-` prefix:
+
+```html
+<waveform-playlist layout="hero" show-volume continuous>
+  <div data-track data-url="intro.mp3" data-title="Intro" data-duration="187"></div>
+  <div data-track data-url="episode.mp3" data-title="Episode 42">
+    <div data-chapter data-time="0:00">Introduction</div>
+    <div data-chapter data-time="5:30">Main Topic</div>
+  </div>
+</waveform-playlist>
+```
+
+- Changing an attribute or a track rebuilds it, and the current track keeps
+  playing (from the same spot) if it is still in the list. Moving the element
+  keeps playback; removing it destroys the playlist.
+- `el.playlist` is the `WaveformPlaylist`; `el.play()`, `el.pause()`,
+  `el.next()` and `el.previous()` control it. Events (`waveformplayer:*`)
+  bubble from the element.
+- The default import and the CDN script register the tag. From
+  `@arraypress/waveform-playlist/no-autoinit` (no auto-init at all), call
+  `defineWaveformPlaylistElement()` — optionally with another tag name.
+- Before it upgrades it is a block reserving `--wp-element-height` (90px by
+  default); set that to your playlist's height to avoid any shift.
+
 ## Documentation
 
 Full options, chapters and the JavaScript API live in the docs.

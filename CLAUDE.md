@@ -12,10 +12,12 @@ markup into tracks/chapters/markers and drives one embedded player.
 
 One path: the container's `data-*` is read by the **core's**
 `WaveformPlayer.utils.parseDataAttributes`, merged over the constructor
-options, and forwarded. A new player option needs **no edit here** — the 1.x
-hand-written fallback parser is gone (2.0 requires a 2.0 core).
+options, and forwarded. A new player option needs no parsing edit here — the
+1.x hand-written fallback parser is gone (2.0 requires a 2.0 core) — only its
+key in `OPTION_KEYS` (`src/js/element.ts`), so `<waveform-playlist>` observes
+it; `test/element.test.js` goes red until it's there.
 
-Two lists in `src/js/index.ts` decide what is *not* forwarded:
+Two lists in `src/js/playlist.ts` decide what is *not* forwarded:
 - `NOT_FORWARDED` — `audioMode` (the playlist owns its audio), `loop` (a looping
   track never fires `ended`, which breaks `continuous`), `showLoop` (its button
   turns that loop on) and `lazy` (the playlist loads its own player). Stripped
@@ -30,7 +32,22 @@ player's `duration`). `data-waveform` strings (URLs, `wp1:` compact peaks) pass
 through for the core to decode; only a `[`-prefixed value is JSON-parsed here.
 
 ## Layout
-- `src/js/index.ts` — the whole library (single file: parsing, DOM, playlist logic).
+- `src/js/playlist.ts` — the `WaveformPlaylist` class (parsing, DOM, playlist
+  logic), no import-time side effects.
+- `src/js/element.ts` — the `<waveform-playlist>` element (light DOM, the
+  element is the container). `OPTION_KEYS` = the playlist's own `data-*`
+  keys + the core's `parseDataAttributes` keys minus `NOT_FORWARDED` and the
+  per-track keys; `TRACK_ATTRIBUTES` = what `parseTracks()` reads. Its
+  attributes reach `parseOptions()` through `optionSources` (a synthetic
+  `dataset`), so both go through the same parsers. `test/element.test.js`
+  fails if either list drifts — a new playlist option or a core option the
+  playlist forwards needs adding to `OPTION_KEYS`.
+  Rebuild = `snapshot()` → destroy → build → `resume()` (same track by
+  element+url, else url; same time; playing if it was).
+- `src/js/entry.ts` — `/no-autoinit`: exports, `WaveformPlaylist.init` (the
+  scan), `window.WaveformPlaylist`. `src/js/index.ts` — the default entry:
+  entry.ts + registering the element + running the scan. Keep side effects
+  out of entry.ts. The two ES builds share `dist/waveform-playlist-shared.esm.js`.
 - `src/js/types.ts` — owns `WaveformPlaylistOptions` and the parsed
   track/chapter/marker shapes. The four `waveform-playlist-*` wrappers derive their
   types from it *and* from `waveform-player`'s. A new option still has to be added
@@ -46,8 +63,10 @@ through for the core to decode; only a `[`-prefixed value is JSON-parsed here.
 ## Conventions
 - ESM only (`"type": "module"`, no CJS build); `main` is the ESM bundle,
   `engines.node >=22.12` so `require()` loads it. `dist/` is committed.
-- Peer dep `@arraypress/waveform-player@^2.0.0`; devDependency is the sibling
-  repo (`file:../waveform-player`).
+- Peer dep `@arraypress/waveform-player@^2.0.0`; devDependency is the
+  published `^2.0.0`.
+- No `data-waveform-autoinit="false"` opt-out (the core and sounds honour it);
+  the default entry always scans and registers — use `/no-autoinit`.
 - Browser floor Chrome/Edge 111, Firefox 114, Safari 16.4.
 - Logging prefix `[WaveformPlaylist]`.
 
