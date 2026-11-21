@@ -258,7 +258,10 @@ describe('peer dependency floor (finding 19)', () => {
 	//   1.23.0 crossOrigin
 	//   1.24.5 load() reports onLoad under preload="none" instead of hanging —
 	//          cross-track chapter seeks wait on that onLoad.
-	const FLOOR = [1, 24, 5];
+	//   2.0.0  utils.parseDataAttributes is the playlist's only data-* parser
+	//          (its 1.x fallback is gone), per-track `duration` and download
+	//          options that loadTrack() resets, and `wp1:` compact peaks.
+	const FLOOR = [2, 0, 0];
 
 	it('does not admit a core older than the playlist needs', async () => {
 		const { readFileSync } = await import('node:fs');

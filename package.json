@@ -1,17 +1,18 @@
 {
   "name": "@arraypress/waveform-playlist",
-  "version": "1.9.0",
+  "version": "2.0.0",
   "description": "Playlist and chapter navigation for WaveformPlayer",
-  "main": "dist/waveform-playlist.js",
-  "module": "dist/waveform-playlist.esm.js",
+  "type": "module",
+  "main": "dist/waveform-playlist.esm.js",
   "unpkg": "dist/waveform-playlist.min.js",
   "types": "./types/index.d.ts",
   "exports": {
     ".": {
       "types": "./types/index.d.ts",
       "import": "./dist/waveform-playlist.esm.js",
-      "require": "./dist/waveform-playlist.js"
+      "default": "./dist/waveform-playlist.esm.js"
     },
+    "./styles.css": "./dist/waveform-playlist.css",
     "./dist/*": "./dist/*",
     "./package.json": "./package.json"
   },
@@ -28,14 +29,14 @@
     "build": "npm run build:js && npm run build:css && npm run build:types",
     "build:js": "npm run build:iife && npm run build:esm && npm run build:min",
     "build:css": "cp src/css/waveform-playlist.css dist/ && esbuild src/css/waveform-playlist.css --minify --outfile=dist/waveform-playlist.min.css",
-    "build:iife": "esbuild src/js/index.ts --tsconfig=tsconfig.esbuild.json --bundle --format=iife --outfile=dist/waveform-playlist.js",
-    "build:esm": "esbuild src/js/index.ts --tsconfig=tsconfig.esbuild.json --bundle --format=esm --outfile=dist/waveform-playlist.esm.js",
-    "build:min": "esbuild src/js/index.ts --tsconfig=tsconfig.esbuild.json --bundle --format=iife --minify --outfile=dist/waveform-playlist.min.js",
+    "build:iife": "esbuild src/js/index.ts --bundle --format=iife --outfile=dist/waveform-playlist.js",
+    "build:esm": "esbuild src/js/index.ts --bundle --format=esm --outfile=dist/waveform-playlist.esm.js",
+    "build:min": "esbuild src/js/index.ts --bundle --format=iife --minify --outfile=dist/waveform-playlist.min.js",
     "build:types": "rm -rf types && tsc -p tsconfig.build.json",
-    "dev": "esbuild src/js/index.ts --tsconfig=tsconfig.esbuild.json --bundle --format=iife --outfile=dist/waveform-playlist.js --watch",
+    "dev": "esbuild src/js/index.ts --bundle --format=iife --outfile=dist/waveform-playlist.js --watch",
     "serve": "npx http-server -p 8000",
     "size": "npm run build && echo 'JS:' && gzip -c dist/waveform-playlist.min.js | wc -c && echo 'CSS:' && gzip -c dist/waveform-playlist.min.css | wc -c",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "npm run test && npm run build",
     "lint": "biome lint",
     "typecheck": "tsc -p ."
   },
@@ -60,11 +61,21 @@
     "url": "https://github.com/WaveformPlayer/waveform-playlist/issues"
   },
   "homepage": "https://github.com/WaveformPlayer/waveform-playlist#readme",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "sideEffects": [
+    "*.css",
+    "./dist/waveform-playlist.esm.js",
+    "./dist/waveform-playlist.js",
+    "./dist/waveform-playlist.min.js",
+    "./src/js/index.ts"
+  ],
   "peerDependencies": {
-    "@arraypress/waveform-player": "^1.24.5"
+    "@arraypress/waveform-player": "^2.0.0"
   },
   "devDependencies": {
-    "@arraypress/waveform-player": "^1.30.2",
+    "@arraypress/waveform-player": "file:../waveform-player",
     "@biomejs/biome": "^2.6.8",
     "esbuild": "^0.28.2",
     "jsdom": "^31.0.1",
