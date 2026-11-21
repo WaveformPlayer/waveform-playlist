@@ -69,8 +69,15 @@ export interface WaveformPlaylistTrack {
  * instance (e.g. `height`, `waveformStyle`, `colorPreset`, `barWidth`,
  * `autoplay`, ...), including its callbacks (`onPlay`, `onPause`, `onEnd`,
  * `onTimeUpdate`, `onLoad`, `onError`, `onNextTrack`, `onPreviousTrack`),
- * which run after the playlist's own handling. `audioMode` is ignored: the
- * playlist always owns its audio.
+ * which run after the playlist's own handling.
+ *
+ * Never forwarded, from the constructor or the container's `data-*`:
+ * - `audioMode` — the playlist always owns its audio.
+ * - `loop` — a looping track never fires `ended`, which breaks `continuous`
+ *   auto-advance.
+ * - `showLoop` — its button turns on that same loop, so it would play the
+ *   current track forever.
+ * - `lazy` — the playlist loads its player's tracks itself.
  */
 export interface WaveformPlaylistOptions {
     /**

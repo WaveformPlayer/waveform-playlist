@@ -83,9 +83,18 @@ const PLAYLIST_OWN_OPTIONS = [
  * - `audioMode` — the playlist always owns its audio. An `'external'` player
  *   inside a playlist dispatches request-play events nobody answers, so the
  *   playlist would never play.
+ * - `loop` — whole-track looping is the `<audio>` element's own `loop`, so
+ *   `ended` never fires: continuous auto-advance and the end-of-track chapter
+ *   reset would stop working.
+ * - `showLoop` — the player's loop button turns on that same whole-track
+ *   loop, so pressing it would play the current track forever and silently
+ *   end auto-advance. The playlist has no loop button of its own.
+ * - `lazy` — the playlist builds its player when it initialises and loads
+ *   tracks into it on demand; deferring that player's first load until it
+ *   scrolls into view only delays the first track's waveform.
  * @internal
  */
-const NOT_FORWARDED = ['audioMode'];
+const NOT_FORWARDED = ['audioMode', 'loop', 'showLoop', 'lazy'];
 
 /**
  * Player options each `[data-track]` supplies for itself (see
@@ -196,8 +205,9 @@ export class WaveformPlaylist {
      * @param {string} [options.barPosition='bottom'] - Grid now-playing bar position: 'top' or 'bottom'
      *
      * Any other option is forwarded to the embedded WaveformPlayer, including
-     * its callbacks (chained after the playlist's own). `audioMode` is ignored:
-     * the playlist always owns its audio.
+     * its callbacks (chained after the playlist's own). `audioMode`, `loop`,
+     * `showLoop` and `lazy` are never forwarded (see NOT_FORWARDED): the
+     * playlist owns its audio, and a looping player never ends a track.
      * @throws {Error} If container not found or WaveformPlayer not available
      */
     constructor(container: string | HTMLElement, options: WaveformPlaylistOptions = {}) {

@@ -124,6 +124,38 @@ describe('real core: constructor options (finding 1)', () => {
 	});
 });
 
+describe('real core: loop, showLoop and lazy stay with the playlist (2.0)', () => {
+	it('a data-loop / data-show-loop container still auto-advances on ended', async () => {
+		const { container, playlist } = mount(THREE_TRACKS, { continuous: true }, { loop: 'true', showLoop: 'true' });
+		expect(playlist.player.audio.loop).toBe(false);
+		expect(container.querySelector('.waveform-loop')).toBeNull();
+
+		await wait(0);
+		metadata(playlist.player, 180);
+		playlist.player.audio.dispatchEvent(new Event('ended'));
+		expect(playlist.currentTrackIndex).toBe(1);
+		expect(playlist.player.options.url).toBe('/b.mp3');
+	});
+
+	it('constructor loop / lazy are ignored: the player loads at once and never loops', async () => {
+		// jsdom has no IntersectionObserver, and without one the core loads a
+		// lazy player at once — so stand in one that never reports, or this
+		// couldn't tell a forwarded `lazy` apart.
+		const saved = window.IntersectionObserver;
+		window.IntersectionObserver = class { observe() {} unobserve() {} disconnect() {} };
+		try {
+			const { playlist } = mount(THREE_TRACKS, { loop: true, lazy: true });
+			expect(playlist.player.options.loop).toBe(false);
+			expect(playlist.player.options.lazy).toBe(false);
+			expect(playlist.player.audio.loop).toBe(false);
+			// Not deferred: a lazy player leaves the source unassigned until it nears the viewport.
+			await vi.waitFor(() => expect(playlist.player.audio.src).toContain('/a.mp3'));
+		} finally {
+			window.IntersectionObserver = saved;
+		}
+	});
+});
+
 describe('real core: destroy() and rebuild (finding 2)', () => {
 	it('keeps the track markup so the same container can be rebuilt', () => {
 		const { container, playlist } = mount(THREE_TRACKS, { layout: 'hero' });

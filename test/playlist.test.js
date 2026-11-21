@@ -550,6 +550,39 @@ describe('constructor options (framework wrappers pass these, not data-*)', () =
 		expect(playlist.options.audioMode).toBeUndefined();
 		expect(playlist.player.options.audioMode).toBeUndefined();
 	});
+
+	// 2.0 player options the playlist must not pass on: `loop` stops `ended`
+	// firing (no auto-advance), `showLoop`'s button turns that loop on, and
+	// `lazy` would only defer the playlist's own player.
+	describe.each([
+		['loop', 'loop', true],
+		['showLoop', 'showLoop', true],
+		['lazy', 'lazy', true],
+	])('never forwards %s', (option, dataKey, value) => {
+		it('from a constructor option', () => {
+			const { playlist } = mount(TWO_TRACKS, { [option]: value });
+			expect(playlist.options[option]).toBeUndefined();
+			expect(playlist.player.options[option]).toBeUndefined();
+		});
+
+		it('from the container data-*', () => {
+			const { playlist } = mountWithData({ [dataKey]: String(value) });
+			expect(playlist.options[option]).toBeUndefined();
+			expect(playlist.player.options[option]).toBeUndefined();
+		});
+
+		it('on a later track load', () => {
+			const { playlist } = mount(TWO_TRACKS, { [option]: value });
+			playlist.selectTrack(1);
+			expect(playlist.player.calls.loadTrack[0].options[option]).toBeUndefined();
+			expect(playlist.player.options[option]).toBeUndefined();
+		});
+	});
+
+	it('also ignores a container data-audio-mode', () => {
+		const { playlist } = mountWithData({ audioMode: 'external' });
+		expect(playlist.player.options.audioMode).toBeUndefined();
+	});
 });
 
 describe('user player callbacks are chained, not overwritten', () => {
