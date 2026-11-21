@@ -132,3 +132,16 @@ describe('cover overlay contrast', () => {
 		}
 	});
 });
+
+describe('vendor prefixes', () => {
+	it('keeps -webkit-backdrop-filter beside every backdrop-filter', () => {
+		// Safari and iOS Safari ship backdrop-filter unprefixed only from 18;
+		// the 2.0 floor is 16.4, where only the prefixed form exists (MDN
+		// browser-compat-data). Chromium-based checks can't see this, so the
+		// prefix is easy to "modernise" away. Drop this guard with the floor.
+		const plain = [...CSS.matchAll(/(?<!-webkit-)backdrop-filter:\s*([^;]+);/g)].map((m) => m[1]);
+		const prefixed = [...CSS.matchAll(/-webkit-backdrop-filter:\s*([^;]+);/g)].map((m) => m[1]);
+		expect(plain.length).toBeGreaterThan(0);
+		expect(prefixed).toEqual(plain);
+	});
+});
