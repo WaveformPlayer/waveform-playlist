@@ -5,21 +5,29 @@ markup into tracks/chapters/markers and drives one embedded player.
 
 ## Commands
 - `npm test` — vitest (run before committing). `npm run typecheck` — strict `tsc`, must be 0 errors.
-- `npm run build` — iife + esm + min + css. `prepublishOnly` runs it.
+- `npm run lint` — Biome. `npm run build` — iife + esm + min + css + types. `prepublishOnly` runs test + build.
 - `npm run size`, `npm run dev` — as elsewhere in the family.
 
-## The rule that matters: two parsers, one is easy to miss
+## How player options reach the embedded player
 
-Player options reach the embedded player by **two** paths:
+One path: the container's `data-*` is read by the **core's**
+`WaveformPlayer.utils.parseDataAttributes`, merged over the constructor
+options, and forwarded. A new player option needs **no edit here** — the 1.x
+hand-written fallback parser is gone (2.0 requires a 2.0 core).
 
-1. **Modern** — core's `parseDataAttributes` handles it. **No edit needed here.**
-2. **Legacy fallback** — a hand-rolled parser in `src/js/index.ts` (`parsePlayerDataAttributesFallback`,
-   the `str('waveformStyle'); int('barWidth'); …` block) that runs against older
-   cores. A new option needs `str('<key>')` / `int` / `bool` / `float` added there.
+Two lists in `src/js/index.ts` decide what is *not* forwarded:
+- `NOT_FORWARDED` — `audioMode` (the playlist owns its audio), `loop` (a looping
+  track never fires `ended`, which breaks `continuous`), `showLoop` (its button
+  turns that loop on) and `lazy` (the playlist loads its own player). Stripped
+  from constructor options *and* data-*. Documented in `types.ts` too.
+- `PER_TRACK_OPTIONS` — url, title, artist, album, artwork, markers, waveform,
+  duration, downloadUrl, downloadName: each `[data-track]` supplies these via
+  `trackPlayerOptions()`, which always returns every key so nothing carries
+  over between tracks. A new per-track player option goes in both.
 
-Because path 1 works on a current core, forgetting path 2 passes every local test
-and only breaks for users pinned to an older `@arraypress/waveform-player`.
-If only the fallback parser changed, that's a **patch** release.
+Track `data-duration` is display text *and* seconds (`durationSeconds` → the
+player's `duration`). `data-waveform` strings (URLs, `wp1:` compact peaks) pass
+through for the core to decode; only a `[`-prefixed value is JSON-parsed here.
 
 ## Layout
 - `src/js/index.ts` — the whole library (single file: parsing, DOM, playlist logic).
@@ -27,16 +35,25 @@ If only the fallback parser changed, that's a **patch** release.
   track/chapter/marker shapes. The four `waveform-playlist-*` wrappers derive their
   types from it *and* from `waveform-player`'s. A new option still has to be added
   here by hand (`test/types.test.js` checks it against `PLAYLIST_OWN_OPTIONS`).
-- `types/` — **generated** declarations (`npm run build:types`, internals marked
-  `@internal` are stripped); committed, like `dist/`. Don't edit by hand.
-- `tsconfig.esbuild.json` — the only tsconfig esbuild reads. Don't point the
-  builds at `tsconfig.json`: its `strict` adds `"use strict"` to the IIFE builds.
+- `types/` — **generated** declarations + maps (`npm run build:types`, internals
+  marked `@internal` are stripped); committed, like `dist/`. Don't edit by hand.
+  `src/` ships so the declaration maps resolve.
+- One `tsconfig.json` (strict, ES2022) for tsc and esbuild, so the IIFE builds
+  start with `"use strict"`; `tsconfig.build.json` emits `types/`.
+- Tests: `test/setup.js` installs a mock core on `window` but with the **real**
+  core's `utils`; `test/integration.test.js` runs against the real core.
 
 ## Conventions
-- Peer dep on `@arraypress/waveform-player@^1.x`; `dist/` is committed.
+- ESM only (`"type": "module"`, no CJS build); `main` is the ESM bundle,
+  `engines.node >=22.12` so `require()` loads it. `dist/` is committed.
+- Peer dep `@arraypress/waveform-player@^2.0.0`; devDependency is the sibling
+  repo (`file:../waveform-player`).
+- Browser floor Chrome/Edge 111, Firefox 114, Safari 16.4.
 - Logging prefix `[WaveformPlaylist]`.
 
 ## Cross-repo
 The four `waveform-playlist-*` wrappers do **not** inherit runtime forwarding from
-this package — each needs its own edit. They were missed in the `crossOrigin`
-release. Load the `waveform-release` skill for the full checklist.
+this package — each needs its own edit. Their drift tests' `NOT_FORWARDED`
+must list `audioMode`, `loop`, `showLoop` and `lazy` (the wrapper can pass
+them, but the playlist drops them) — as of 2.0 they list only `audioMode`. Load the
+`waveform-release` skill for the full checklist.

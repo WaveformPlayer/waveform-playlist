@@ -8,18 +8,75 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [2.0.0] — Unreleased
 
+Requires `@arraypress/waveform-player` 2.0.
+
+### Added
+
+- **Per-track `duration`.** A track's `data-duration` now also reaches the
+  player as its 2.0 `duration` option, so the time readout, markers and seeks
+  have a length before the audio's metadata loads (with `preload: 'none'`,
+  that is not until playback starts). It accepts `"3:45"`, `"1:02:03"` or a
+  bare count of seconds (`"225"`, the core's own form). Parsed tracks gain
+  `durationSeconds`.
+- **Per-track download target.** `data-download-url` and `data-download-name`
+  on a `[data-track]` (`downloadUrl` / `downloadName` on the parsed track)
+  set the player's download link for that track; without them the core
+  links the track's own url. Turn the link on with `data-show-download` on
+  the playlist.
+- **Compact `wp1:` peaks** in a track's `data-waveform` are passed through
+  for the player to decode, like a peaks URL.
+- The 2.0 player options set on the playlist — `showVolume`, `volume`,
+  `showDownload`, `volumeLabel`, `muteLabel`, `downloadLabel`, … — reach its
+  player, from `data-*` or constructor options.
+
+### Changed
+
+- **Written in TypeScript**, with generated type declarations (`types/`) and
+  declaration maps, so "Go to definition" opens the shipped source.
+- **Browser support is Chrome/Edge 111+, Firefox 114+ and Safari 16.4+**,
+  as the core's. The bundles are built for ES2022.
+- **The script-tag builds run in strict mode.** They now start with
+  `"use strict"`; the ES module build always did.
+- **Only the core reads the playlist's `data-*` player options.** The
+  playlist kept a parser of its own for cores older than
+  `WaveformPlayer.utils.parseDataAttributes`; every 2.0 core has it, so the
+  core's parser is the only path and the playlist can no longer fall behind
+  a new player option. Its value checks are the core's: a non-numeric
+  `data-height` falls back to the default with the core's warning, and
+  `data-playback-rates="2"` is a one-rate list.
+- **A bare-seconds `data-duration` is shown formatted**: `"187"` displays as
+  `3:07` (it was shown as `187`). Any other value is shown as written.
+- **`main` is the ES module build** (`"type": "module"`). It was the IIFE,
+  so `require()` returned an empty object and only set
+  `window.WaveformPlaylist`.
+- **An explicit `exports` map**: `.`, `./styles.css`, `./dist/*` (for the
+  documented CDN and `dist/` paths) and `./package.json`.
+- **CSS tidied for the 2.0 browser floor**: declarations that could never
+  apply are gone and repeated rules are merged. Rendering is unchanged.
+
+### Removed
+
+- **CommonJS.** The `require` export condition (which pointed at the IIFE)
+  and the `module` field are gone. `require('@arraypress/waveform-playlist')`
+  still works on Node 22.12+, which loads the ES module through `require()`;
+  `engines` now says `>=22.12`.
+- **The `data-color` and `data-theme` aliases** on the playlist container,
+  which the playlist's own parser still read after the core dropped them.
+  Use `data-waveform-color` and `data-color-preset`.
+- **`loop`, `showLoop` and `lazy` are never passed to the player**, from
+  constructor options or `data-*`, like `audioMode`. A looping track never
+  fires `ended`, which ends `continuous` auto-advance, and `showLoop`'s button
+  turns that same loop on, so it would play the current track forever. `lazy`
+  would only defer the playlist's own player.
+- **The container's `data-duration`, `data-download-url` and
+  `data-download-name`** are ignored: they describe one track, so they go on
+  each `[data-track]`.
+
 ### Fixed
 
 - **Compact density keeps its 28px thumbnails on phones.** Below 480px the
   narrow-screen rule's 32px lead column overrode `density: 'compact'`, so
   compact lists got bigger thumbnails on the smallest screens.
-
-### Changed
-
-- **Written in TypeScript**, with generated type declarations (`types/`).
-- **CSS tidied for the 2.0 browser floor** (Chrome/Edge 111, Firefox 114,
-  Safari 16.4): declarations that could never apply are gone and repeated
-  rules are merged. Rendering is unchanged.
 
 ## [1.9.0] — 2026-10-07
 

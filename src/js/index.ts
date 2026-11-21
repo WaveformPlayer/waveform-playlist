@@ -2,7 +2,6 @@
  * WaveformPlaylist
  * Playlist and chapter navigation for WaveformPlayer
  *
- * @version 1.0.0
  * @author ArrayPress
  * @license MIT
  */
