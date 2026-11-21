@@ -7,7 +7,8 @@ import {
 
 // src/js/index.ts
 var js_default = entry_default;
-if (typeof document !== "undefined") {
+var autoInitDisabled = () => document.documentElement?.dataset.waveformAutoinit === "false";
+if (typeof document !== "undefined" && !autoInitDisabled()) {
   const start = () => {
     defineWaveformPlaylistElement();
     entry_default.init();
@@ -40,7 +41,8 @@ export {
  * The default entry point: everything `entry.ts` exports, plus making markup
  * come alive by itself — it registers `<waveform-playlist>` and scans for
  * `[data-waveform-playlist]` once the DOM is ready (and the core is loaded).
- * `@arraypress/waveform-playlist/no-autoinit` does neither.
+ * `@arraypress/waveform-playlist/no-autoinit` does neither, and nor does
+ * this entry on a page with `<html data-waveform-autoinit="false">`.
  *
  * @author ArrayPress
  * @license MIT

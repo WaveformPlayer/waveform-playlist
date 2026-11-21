@@ -44,6 +44,12 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Pages that opted out of auto-init still had playlists built.** The
+  family's switch, `<html data-waveform-autoinit="false">`, is now honoured
+  as the core honours it: on such a page importing the package (or loading
+  the CDN script) neither scans for `[data-waveform-playlist]` nor registers
+  `<waveform-playlist>`. `WaveformPlaylist.init()` and
+  `defineWaveformPlaylistElement()` still do, when the page calls them.
 - The `[data-waveform-playlist]` scan (`WaveformPlaylist.init()`) skips a
   container that already has a playlist built in script, instead of building
   a second one over it.

@@ -35,6 +35,29 @@ describe('element registration', () => {
 		expect(window.WaveformPlaylist).toBe(mod.WaveformPlaylist);
 	});
 
+	it('the default entry neither registers nor scans when the page opts out of auto-init', async () => {
+		document.documentElement.dataset.waveformAutoinit = 'false';
+		try {
+			MockWaveformPlayer.instances = [];
+			document.body.innerHTML = `<div data-waveform-playlist>${TRACKS}</div><waveform-playlist>${TRACKS}</waveform-playlist>`;
+			const define = vi.spyOn(customElements, 'define');
+			const mod = await fresh('../src/js/index.js');
+			expect(define).not.toHaveBeenCalled();
+			expect(customElements.get('waveform-playlist')).toBeUndefined();
+			expect(MockWaveformPlayer.instances).toHaveLength(0);
+			expect(document.querySelector('[data-waveform-playlist]').dataset.waveformPlaylistInitialized).toBeUndefined();
+
+			// The page can still ask for both.
+			mod.WaveformPlaylist.init();
+			expect(MockWaveformPlayer.instances).toHaveLength(1);
+			mod.defineWaveformPlaylistElement('opted-out-playlist');
+			document.body.insertAdjacentHTML('beforeend', `<opted-out-playlist>${TRACKS}</opted-out-playlist>`);
+			expect(document.querySelector('opted-out-playlist').playlist).toBeInstanceOf(mod.WaveformPlaylist);
+		} finally {
+			delete document.documentElement.dataset.waveformAutoinit;
+		}
+	});
+
 	it('the default entry registers <waveform-playlist>, which then initialises server-rendered markup', async () => {
 		MockWaveformPlayer.instances = [];
 		document.body.innerHTML = `<waveform-playlist layout="minimal">${TRACKS}</waveform-playlist>`;

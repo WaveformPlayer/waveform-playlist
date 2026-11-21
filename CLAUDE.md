@@ -65,8 +65,9 @@ through for the core to decode; only a `[`-prefixed value is JSON-parsed here.
   `engines.node >=22.12` so `require()` loads it. `dist/` is committed.
 - Peer dep `@arraypress/waveform-player@^2.0.0`; devDependency is the
   published `^2.0.0`.
-- No `data-waveform-autoinit="false"` opt-out (the core and sounds honour it);
-  the default entry always scans and registers — use `/no-autoinit`.
+- Two auto-init opt-outs, as in the core: `<html data-waveform-autoinit="false">`
+  (read once, at import, in `index.ts`'s `autoInitDisabled()`) gates both the
+  scan and registering the element; bundles use `/no-autoinit`.
 - Browser floor Chrome/Edge 111, Firefox 114, Safari 16.4.
 - Logging prefix `[WaveformPlaylist]`.
 

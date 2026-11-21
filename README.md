@@ -51,7 +51,9 @@ The same markup, as a custom element. Its attributes are the playlist's
 - `el.playlist` is the `WaveformPlaylist`; `el.play()`, `el.pause()`,
   `el.next()` and `el.previous()` control it. Events (`waveformplayer:*`)
   bubble from the element.
-- The default import and the CDN script register the tag. From
+- The default import and the CDN script register the tag (and scan for
+  `data-waveform-playlist`) unless the page sets
+  `<html data-waveform-autoinit="false">`. From
   `@arraypress/waveform-playlist/no-autoinit` (no auto-init at all), call
   `defineWaveformPlaylistElement()` — optionally with another tag name.
 - Before it upgrades it is a block reserving `--wp-element-height` (90px by
