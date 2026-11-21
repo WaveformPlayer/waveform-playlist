@@ -9,7 +9,6 @@
 
 import type { WaveformPlayer } from '@arraypress/waveform-player';
 import type {
-    WaveformPlaylistChapter,
     WaveformPlaylistMarker,
     WaveformPlaylistOptions,
     WaveformPlaylistTrack,
@@ -362,7 +361,7 @@ export class WaveformPlaylist {
         // array the option is documented to be.
         const jsonArray = (k: string, o: string = k) => {
             if (!ds[k]) return;
-            let parsed;
+            let parsed: any;
             try { parsed = JSON.parse(ds[k]!); }
             catch (e) {
                 console.warn(`[WaveformPlaylist] Invalid ${k} JSON:`, e);
@@ -421,7 +420,7 @@ export class WaveformPlaylist {
     parseMarkers(raw: string | undefined): WaveformPlaylistMarker[] {
         if (!raw) return [];
 
-        let parsed;
+        let parsed: any;
         try {
             parsed = JSON.parse(raw);
         } catch (e) {

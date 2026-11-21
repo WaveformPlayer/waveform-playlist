@@ -76,6 +76,7 @@ export class MockWaveformPlayer {
 
 	/** Mirrors core `load()`: async, metadata first, then onLoad (or onError). */
 	async _load(url) {
+		// biome-ignore lint/suspicious/noAssignInExpressions: bump and read the load sequence in one step
 		const seq = (this._loadSeq = (this._loadSeq || 0) + 1);
 		this.audio.src = url;
 		this.audio.duration = NaN;

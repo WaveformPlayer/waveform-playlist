@@ -35,7 +35,9 @@
     "dev": "esbuild src/js/index.ts --tsconfig=tsconfig.esbuild.json --bundle --format=iife --outfile=dist/waveform-playlist.js --watch",
     "serve": "npx http-server -p 8000",
     "size": "npm run build && echo 'JS:' && gzip -c dist/waveform-playlist.min.js | wc -c && echo 'CSS:' && gzip -c dist/waveform-playlist.min.css | wc -c",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "lint": "biome lint",
+    "typecheck": "tsc -p ."
   },
   "keywords": [
     "audio",
@@ -63,6 +65,7 @@
   },
   "devDependencies": {
     "@arraypress/waveform-player": "^1.30.2",
+    "@biomejs/biome": "^2.6.8",
     "esbuild": "^0.28.2",
     "jsdom": "^31.0.1",
     "typescript": "^7.0.2",
