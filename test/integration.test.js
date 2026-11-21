@@ -291,11 +291,12 @@ describe('container data-* goes through the core\'s parser (finding 16)', () => 
 		expect(playlist.options).toMatchObject(core);
 	});
 
-	it('no longer reads the data-color / data-theme aliases 2.0 removed', () => {
+	it('honours the deprecated data-color / data-theme aliases through the core', () => {
+		// The core keeps them in 2.0 (warning once per page) so CDN pages on
+		// @latest keep their colours; the playlist inherits that via its parser.
 		const { playlist } = mount(THREE_TRACKS, {}, { color: '#123456', theme: 'light' });
-		expect(playlist.options.waveformColor).toBeUndefined();
-		expect(playlist.options.colorPreset).toBeUndefined();
-		expect(playlist.player.options.waveformColor).not.toBe('#123456');
+		expect(playlist.options.waveformColor).toBe('#123456');
+		expect(playlist.options.colorPreset).toBe('light');
 	});
 });
 

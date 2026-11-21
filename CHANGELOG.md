@@ -60,9 +60,6 @@ Requires `@arraypress/waveform-player` 2.0.
   and the `module` field are gone. `require('@arraypress/waveform-playlist')`
   still works on Node 22.12+, which loads the ES module through `require()`;
   `engines` now says `>=22.12`.
-- **The `data-color` and `data-theme` aliases** on the playlist container,
-  which the playlist's own parser still read after the core dropped them.
-  Use `data-waveform-color` and `data-color-preset`.
 - **`loop`, `showLoop` and `lazy` are never passed to the player**, from
   constructor options or `data-*`, like `audioMode`. A looping track never
   fires `ended`, which ends `continuous` auto-advance, and `showLoop`'s button
